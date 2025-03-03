@@ -7,7 +7,8 @@ to create new table (you can call the table geotable ) in this case mimicking th
 processing of geospatial data, of a special interest is converting pairs of longitude latitude into geometry just like in geodataframe!
 
 We will extend the following abstraction:
-- [datascience](https://github.com/data-8/datascience)
+- [datascience](https://github.com/data-8/datascience).
+
 ***Team members***:
 - [Dr. Isam Al Jawarneh](https://isamaljawarneh.github.io/) (```supervisor```)
 - [member1]() (```member```)
