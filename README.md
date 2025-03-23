@@ -12,7 +12,7 @@ We will extend the following abstraction:
 ***Team members***:
 - [Dr. Isam Al Jawarneh](https://isamaljawarneh.github.io/) (```supervisor```)
 - [member1]() (```member```)
-- [member2]() (```member```) 
+- [new member]() (```member```) 
 - [member3]() (```member```) 
 
 
