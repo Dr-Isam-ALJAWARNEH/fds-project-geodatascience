@@ -11,7 +11,7 @@ We will extend the following abstraction:
 
 ***Team members***:
 - [Dr. Isam Al Jawarneh](https://isamaljawarneh.github.io/) (```supervisor```)
-- [Omar]() (```member```)
+- [Majid]() (```member```)
 - [new member]() (```member```) 
 - [member3]() (```member```) 
 
