@@ -121,7 +121,7 @@ LocationC,-73.9352,40.7306
 
 2. Input GeoJSON File (`regions.geojson`):
 
-        ```
+```
         {
         "type": "FeatureCollection",
         "features": [
@@ -143,15 +143,15 @@ LocationC,-73.9352,40.7306
             }
         ]
         }
-        ```
+```
 
 - Output
 1. Joined Table :
-        ```
+```
         name      | longitude | latitude | geometry                  | region
         LocationA | -122.4194 | 37.7749  | POINT (-122.4194 37.7749) | West
         LocationC | -73.9352  | 40.7306  | POINT (-73.9352 40.7306)  | East
-        ```
+```
 2. Plot :
 A map showing points colored by their associated regions.
 
@@ -189,15 +189,15 @@ You can then apply select and where to this joined table.
 * Input Data
 - CSV File (`locations.csv`) 
 
-        ```
+```
             name,longitude,latitude
         LocationA,-122.4194,37.7749
         LocationB,-118.2437,34.0522
         LocationC,-73.9352,40.7306
-        ```
+```
 - GeoJSON File (neighborhoods.geojson) :
 
-        ```
+```
         {
         "type": "FeatureCollection",
         "features": [
@@ -219,14 +219,14 @@ You can then apply select and where to this joined table.
             }
         ]
         }
-        ```
+```
 
 * Output
 - Printed Table:
-        ```
+```
         name      | longitude | latitude | neighborhood
         LocationA | -122.4194 | 37.7749  | Downtown
-        ```
+```
 
 Plot:
 A map showing only the points in the "Downtown" neighborhood.
@@ -258,16 +258,16 @@ Use the apply method to apply this function to the geometry column in the joined
 * Input Data
     - CSV File (`locations.csv`) :
 
-        ```
+```
             name,longitude,latitude
         LocationA,-122.4194,37.7749
         LocationB,-118.2437,34.0522
         LocationC,-73.9352,40.7306
-        ```
+```
 
     - GeoJSON File (regions.geojson) :
 
-        ```
+```
             {
         "type": "FeatureCollection",
         "features": [
@@ -289,15 +289,15 @@ Use the apply method to apply this function to the geometry column in the joined
             }
         ]
         }
-        ```
+```
 
 * Output
     - Printed Table:
-        ```
+```
             name      | longitude | latitude | geometry                  | region | Area
         LocationA | -122.4194 | 37.7749  | POLYGON (...)             | West   | 100.0
         LocationC | -73.9352  | 40.7306  | POLYGON (...)             | East   | 100.0
-        ```
+```
 The "Area" column contains the calculated area of each polygon.
 
     - Plot:
