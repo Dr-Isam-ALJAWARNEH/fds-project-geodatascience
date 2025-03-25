@@ -6,6 +6,9 @@ As a starting point, it reads csv containing geospatial data in form of longitud
 to create new table (you can call the table geotable ) in this case mimicking the table abstraction and extending it to include 
 processing of geospatial data, of a special interest is converting pairs of longitude latitude into geometry just like in geodataframe!
 
+# Guidelines
+
+- Take the following abstraction (Table) which convets csv into table instead of dataframe. now you need to extend this abstraction so that it does the following,  it reads csv containing geospatial data in form of longitude latitude and then use geodataframe ro create new table (you can call the table geotable ) in this case mimicking the table abstraction and extending it to include processing of geospatial data, of a special interest is converting pairs of longitude latitude into geometry just like in geodataframe
 
 
 
