@@ -156,7 +156,7 @@ LocationC | -73.9352  | 40.7306  | POINT (-73.9352 40.7306)  | East
 A map showing points colored by their associated regions.
 
 
-# summary
+# summary so far
 - Explanation of the Workflow
 1. Reading Data :
 * The from_csv method reads the CSV file and converts longitude and latitude into geometry objects.
@@ -167,3 +167,148 @@ A map showing points colored by their associated regions.
 3. Visualization :
 * The plot method visualizes the joined data, optionally coloring points by their associated regions.
 - This implementation makes it easy for users to work with geospatial data without needing to understand the underlying complexities of geopandas.
+
+
+# more features
+
+## Feature 1
+- Now you should apply `select` method and `where` methods from the `table` abstraction to select rows from `joined geospatial table` that satisfy certain conditions, such as equals to specific neighbourhood name
+    > you can absolutely use the `select` and `where` methods from the `Table` abstraction to filter rows from a joined geospatial table based on specific conditions, such as selecting rows that correspond to a specific neighborhood name. Below is an explanation of how you can achieve this, along with an example.
+
+- Key Concepts
+1. `select` Method :
+The select method allows you to choose specific columns from the table.
+This is useful for reducing the table to only the columns you are interested in.
+where Method :
+2. The `where` method filters rows based on a condition.
+You can use it to select rows where a column matches a specific value (e.g., a neighborhood name).
+3. Joined Geospatial Table :
+After performing a spatial join (e.g., using `spatial_join`), the resulting table will contain both the original data and additional columns from the joined GeoJSON file (e.g., neighborhood names).
+You can then apply select and where to this joined table.
+- Example Workflow
+* Input Data
+- CSV File (`locations.csv`) 
+
+    ```
+    name,longitude,latitude
+LocationA,-122.4194,37.7749
+LocationB,-118.2437,34.0522
+LocationC,-73.9352,40.7306
+```
+- GeoJSON File (neighborhoods.geojson) :
+
+```
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": { "neighborhood": "Downtown" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[-125, 30], [-125, 40], [-115, 40], [-115, 30], [-125, 30]]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "neighborhood": "Uptown" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[-80, 35], [-80, 45], [-70, 45], [-70, 35], [-80, 35]]]
+      }
+    }
+  ]
+}
+```
+
+* Output
+- Printed Table:
+```
+name      | longitude | latitude | neighborhood
+LocationA | -122.4194 | 37.7749  | Downtown
+```
+
+Plot:
+A map showing only the points in the "Downtown" neighborhood.
+
+### Notes
+- Column Names :
+Ensure that the column names used in select and where match the actual column names in the joined table. If there are duplicate column names after the join, they may be renamed (e.g., neighborhood_2).
+- Spatial Predicate :
+The predicate argument in spatial_join determines the type of spatial relationship (e.g., "within", "intersects", etc.). Choose the one that fits your use case.
+- Performance :
+For large datasets, spatial joins can be computationally expensive. Consider simplifying geometries or filtering data beforehand if performance becomes an issue.
+By combining the select and where methods with spatial joins, you can efficiently query and analyze geospatial data using the Table abstraction.
+
+## Feature 2
+
+- Now how to use table.apply to Apply fn to each element or elements of column in joined geospatial data, for example a function to calculate the area of each polygon in the geo data 
+
+- To use the Table.apply method to calculate the area of each polygon in a joined geospatial table, you need to follow these steps:
+
+1. Ensure Geospatial Data is Available :
+After performing a spatial join (e.g., using spatial_join), the resulting table will contain geometry columns from the GeoJSON file (e.g., polygons).
+These geometry columns are stored as Shapely objects (e.g., shapely.geometry.Polygon), which have built-in methods like .area.
+2. Define a Function to Calculate Polygon Area :
+Write a function that takes a geometry object (e.g., a polygon) and returns its area.
+3. Apply the Function Using Table.apply :
+Use the apply method to apply this function to the geometry column in the joined table.
+
+- Example Workflow
+* Input Data
+    - CSV File (`locations.csv`) :
+
+    ```
+    name,longitude,latitude
+LocationA,-122.4194,37.7749
+LocationB,-118.2437,34.0522
+LocationC,-73.9352,40.7306
+```
+
+    - GeoJSON File (regions.geojson) :
+
+    ```
+    {
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": { "region": "West" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[-125, 30], [-125, 40], [-115, 40], [-115, 30], [-125, 30]]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "region": "East" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[-80, 35], [-80, 45], [-70, 45], [-70, 35], [-80, 35]]]
+      }
+    }
+  ]
+}
+```
+
+* Output
+    - Printed Table:
+    ```
+    name      | longitude | latitude | geometry                  | region | Area
+LocationA | -122.4194 | 37.7749  | POLYGON (...)             | West   | 100.0
+LocationC | -73.9352  | 40.7306  | POLYGON (...)             | East   | 100.0
+```
+The "Area" column contains the calculated area of each polygon.
+
+    - Plot:
+A map showing points colored by their associated regions.
+
+* Notes
+1. Geometry Column Name :
+Ensure that the geometry column name (e.g., "geometry") matches the actual column name in the joined table. If the column name is different, adjust the apply call accordingly.
+2. Coordinate Reference System (CRS) :
+The .area property calculates the area in the units of the CRS. For geographic coordinates (e.g., EPSG:4326), the area will be in square degrees, which may not be meaningful. To get accurate areas in meters or kilometers, reproject the geometries to a projected CRS (e.g., UTM).
+3. Handling Missing Geometries :
+If some rows do not have valid geometries, ensure your function handles None values gracefully
+
+- By combining `Table.apply` with Shapely's geometry methods, you can efficiently compute derived properties like area for geospatial data.
