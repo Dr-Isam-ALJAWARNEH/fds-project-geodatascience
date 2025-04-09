@@ -30,6 +30,7 @@ We will extend the following abstraction:
 ***Team members***:
 - [Dr. Isam Al Jawarneh](https://isamaljawarneh.github.io/) (```supervisor```)
 - [Mahmoud Madi](https://github.com/MahmoudMadi77) (```member```)
+- [Abdullah Abdulkarim] (```member```)
 - [Joude Azzam]() (```member```)
 - [Said]() (```member```) 
 - [Mohammad]() (```member```) 
