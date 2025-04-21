@@ -15,9 +15,11 @@ class GeoTable(Table):
     converting them into geometry objects, and performing geospatial operations.
     """
 
-    def __init__(self, labels=None, formatter=None):
-        super().__init__(labels, formatter)
-        self._geometry = None  # To store the geometry column
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if 'geometry' not in self.labels:
+            self.append_column('geometry', [None] * self.num_rows)
+        self._geometry = 'geometry'
 
     @classmethod
     def from_csv(cls, filepath_or_buffer, lon_col, lat_col, crs="EPSG:4326", *args, **kwargs):
@@ -66,38 +68,66 @@ class GeoTable(Table):
 
         return gdf
 
-    def plot(self, *args, **kwargs):
+    def distance_to(self, other, ref_index=0, new_column='distance_to_ref'):
         """
-        Plot the geospatial data in the GeoTable.
+        Computes distance in meters from each point in this GeoTable to a reference point
+        in another GeoTable.
 
         Args:
-            *args, **kwargs: Arguments passed to geopandas.GeoDataFrame.plot().
+            other (GeoTable): Another GeoTable containing reference point.
+            ref_index (int): Index of the reference point in the other GeoTable.
+            new_column (str): Column name to store distances.
         """
-        gdf = self.to_geodataframe()
-        gdf.plot(*args, **kwargs)
+        if not isinstance(other, GeoTable):
+            raise TypeError("Other must be a GeoTable.")
 
-    def distance_to(self, other_geo_table, target_col="distance"):
+        gdf_self = self.to_geodataframe().set_crs("EPSG:4326")
+        gdf_other = other.to_geodataframe().set_crs("EPSG:4326")
+
+        if ref_index < 0 or ref_index >= len(gdf_other):
+            raise IndexError(f"Reference index {ref_index} out of bounds.")
+
+        # Reproject to metric CRS for distance calculation
+        gdf_self_proj = gdf_self.to_crs("EPSG:3857")
+        ref_point = gdf_other.to_crs("EPSG:3857").geometry.iloc[ref_index]
+
+        distances = gdf_self_proj.geometry.distance(ref_point)
+        self[new_column] = distances.round(1).tolist()
+
+    def plot(self, zoom=12, **kwargs):
         """
-        Compute the distance between geometries in this GeoTable and another GeoTable.
+        Plot the GeoTable on a basemap using contextily.
 
         Args:
-            other_geo_table (GeoTable): Another GeoTable to compute distances to.
-            target_col (str): Name of the column to store the computed distances.
-
-        Returns:
-            A new GeoTable with an additional column containing distances.
+            zoom (int): Zoom level for the basemap.
+            **kwargs: Additional arguments passed to GeoDataFrame.plot()
         """
-        if not isinstance(other_geo_table, GeoTable):
-            raise ValueError("The other table must be a GeoTable.")
+        if self._geometry not in self.labels:
+            raise ValueError(f"Geometry column '{self._geometry}' not found.")
 
-        # Convert both tables to GeoDataFrames
-        gdf1 = self.to_geodataframe()
-        gdf2 = other_geo_table.to_geodataframe()
+        try:
+            import contextily as ctx
+            import matplotlib.pyplot as plt
+        except ImportError:
+            raise ImportError("Install contextily and matplotlib to enable plotting.")
 
-        # Compute distances
-        distances = gdf1.distance(gdf2.iloc[0].geometry)
+        # Convert to GeoDataFrame with proper CRS
+        gdf = self.to_geodataframe().set_crs("EPSG:4326")
+        gdf_proj = gdf.to_crs("EPSG:3857")  # Web Mercator projection
 
-        # Add distances as a new column
-        new_table = self.with_column(target_col, distances.values)
+        # Create the figure
+        fig, ax = plt.subplots(figsize=(10, 8))
 
-        return new_table
+        # Plot the points on top of basemap
+        gdf_proj.plot(ax=ax, markersize=20, color='blue', alpha=0.7, edgecolor='white', linewidth=0.5)
+
+        # Add basemap below the points
+        ctx.add_basemap(ax, source=ctx.providers.CartoDB.Positron, zoom=zoom)
+
+        # Clean up plot aesthetics
+        ax.set_axis_off()
+        plt.tight_layout()
+
+        # Display the figure (no return to suppress extra output)
+        plt.show()
+
