@@ -8,6 +8,7 @@ import geopandas as gpd
 from shapely.geometry import Point
 from datascience import Table
 import pandas as pd
+import re
 
 class GeoTable(Table):
     """
@@ -167,3 +168,53 @@ class GeoTable(Table):
             bool: True if both 'lat' and 'lon' keys are present in _custom_lat_lon and not None, False otherwise.
         """
         return self._custom_lat_lon.get('lat') is not None and self._custom_lat_lon.get('lon') is not None
+    
+
+    def _infer_lat_lon_columns(self):
+        """
+        Attempts to infer the latitude and longitude column names from the table,
+        using custom names (if set), flexible pattern matching, and data type heuristics.
+
+        Returns:
+            tuple: (latitude_column_name, longitude_column_name) or (None, None)
+        """
+        # Check for user-defined custom names
+        # if self._custom_lat_lon.get('lat') in self.labels and self._custom_lat_lon.get('lon') in self.labels:
+        #     return self._custom_lat_lon['lat'], self._custom_lat_lon['lon']
+
+
+        possible_lat_names = ['lat', 'latitude']
+        possible_lon_names = ['lon', 'lng', 'long', 'longitude']
+
+        lat_candidates = []
+        lon_candidates = []
+
+        for col in self.labels:
+            clean_col = col.lower().strip()
+
+            # Try to find 'lat' in name using regex word boundaries or partial match
+            if any(re.search(rf"\b{lat}\b", clean_col) or lat in clean_col for lat in possible_lat_names):
+                lat_candidates.append(col)
+            if any(re.search(rf"\b{lon}\b", clean_col) or lon in clean_col for lon in possible_lon_names):
+                lon_candidates.append(col)
+
+        def is_numeric_column(col_name):
+            try:
+                values = self[col_name]
+                sample = [v for v in values if v is not None][:5]
+                return all(isinstance(x, (float, int)) for x in sample)
+            except Exception:
+                return False
+
+        # Filter further based on numeric check
+        lat_col = next((c for c in lat_candidates if is_numeric_column(c)), None)
+        lon_col = next((c for c in lon_candidates if is_numeric_column(c)), None)
+
+        if not lat_col or not lon_col:
+            return None, None
+
+        # Save found names privately
+        self._custom_lat_lon['lat'] = lat_col
+        self._custom_lat_lon['lon'] = lon_col
+        print(f"Found {lat_col} and {lon_col}")
+        return lat_col, lon_col
