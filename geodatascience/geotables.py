@@ -157,3 +157,13 @@ class GeoTable(Table):
         """
         self._custom_lat_lon['lat'] = lat_name
         self._custom_lat_lon['lon'] = lon_name
+
+    
+    def _is_lat_lon_set(self):
+        """
+        Checks if custom latitude and longitude column names have been set.
+
+        Returns:
+            bool: True if both 'lat' and 'lon' keys are present in _custom_lat_lon and not None, False otherwise.
+        """
+        return self._custom_lat_lon.get('lat') is not None and self._custom_lat_lon.get('lon') is not None
