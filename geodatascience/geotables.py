@@ -21,6 +21,10 @@ class GeoTable(Table):
         if 'geometry' not in self.labels:
             self.append_column('geometry', [None] * self.num_rows)
         self._geometry = 'geometry'
+        self._custom_lat_lon = {
+            'lat': None,
+            'lon': None
+        }
 
     @classmethod
     def from_csv(cls, filepath_or_buffer, lon_col, lat_col, crs="EPSG:4326", *args, **kwargs):
