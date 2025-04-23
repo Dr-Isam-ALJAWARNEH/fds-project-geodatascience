@@ -137,29 +137,3 @@ class GeoTable(Table):
         plt.show()
 
 
-    def to_geodf(self, lat_col='latitude', lon_col='longitude', crs='EPSG:4326'):
-        """
-        Convert the GeoTable into a GeoDataFrame using either the existing 'geometry' column,
-        or the specified latitude and longitude columns to create geometry.
-
-        Parameters:
-        - lat_col (str): Name of the latitude column (optional if 'geometry' is present).
-        - lon_col (str): Name of the longitude column (optional if 'geometry' is present).
-        - crs (str): Coordinate Reference System for the geometry. Default is 'EPSG:4326'.
-
-        Returns:
-        - geopandas.GeoDataFrame: A geospatially-aware dataframe.
-        """
-        df = self.to_df()
-
-        if self._geometry in self.labels and all(isinstance(g, Point) for g in self['geometry'] if g is not None):
-            # Use existing geometry column
-            geometry = self['geometry']
-            print("🧪 Using existing geometry column to create GeoDataFrame.")
-
-        else:
-            raise ValueError("No geometry data available! Provide valid 'geometry' column or latitude/longitude columns.")
-
-        # Create GeoDataFrame with geometry
-        gdf = gpd.GeoDataFrame(df, geometry=geometry, crs=crs)
-        return gdf
