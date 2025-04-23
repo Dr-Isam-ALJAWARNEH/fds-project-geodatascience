@@ -218,3 +218,69 @@ class GeoTable(Table):
         self._custom_lat_lon['lon'] = lon_col
         print(f"Found {lat_col} and {lon_col}")
         return lat_col, lon_col
+    
+
+
+    def with_columns(self, *args):
+        """
+        Returns a new GeoTable with additional or replaced columns.
+
+        This method extends the default `with_columns()` from the parent `Table` class.
+        After adding or replacing columns, it automatically checks for columns that
+        appear to represent latitude and longitude using a private helper function
+        `_infer_lat_lon_columns()`. If such columns are found, a new `geometry` column
+        is generated using these coordinates and stored as `shapely.geometry.Point` objects.
+
+        If a `geometry` column already exists, it is preserved as-is.
+        If neither geometry nor recognizable latitude/longitude columns are found,
+        an empty geometry column (filled with None) is created to maintain compatibility.
+
+        Parameters:
+            *args: A sequence of alternating column labels and column values,
+                  similar to `datascience.Table.with_columns()`.
+
+        Returns:
+            GeoTable: A new GeoTable instance with the updated columns and a geometry column.
+        """
+        # Use the superclass method to get a new Table
+        new_table = Table().with_columns(*args)
+        
+        # Ensure 'geometry' is has same number of input rows for correct insertion of other columns
+        if self._geometry not in new_table.labels:
+            new_table.append_column('geometry', [None] * new_table.num_rows)
+
+        # Convert to GeoTable
+        geo = GeoTable()
+
+        # Copy columns from new_table to geo
+        for label in new_table.labels:
+            geo.append_column(label, new_table.column(label))
+
+        if self._geometry in args[::2]:
+            print("🧪 Using existing geometry column.")
+            return geo
+
+        lat_label, lon_label = None, None
+    
+        # Check if custom 'longitue' and 'latitude' column names have been used
+        if self._is_lat_lon_set() and self._custom_lat_lon['lat'] in geo.labels and self._custom_lat_lon['lon'] in geo.labels:
+            lat_label = self._custom_lat_lon['lat']
+            lon_label = self._custom_lat_lon['lon']
+
+        else:
+            # Use private method to infer latitude and longitude columns
+            lat_label, lon_label = geo._infer_lat_lon_columns()
+
+
+        if lat_label and lon_label:
+            # Create geometry column
+            geometry = [Point(lon, lat) for lat, lon in zip(geo.column(lat_label), geo.column(lon_label))]
+            geo.drop('geometry')
+            geo.append_column('geometry', geometry)
+
+            if self._is_lat_lon_set() and self._custom_lat_lon['lat'] != lat_label and self._custom_lat_lon['lon'] != lon_label:
+                print(f"Replace: {lat_label} with: {self._custom_lat_lon['lat']}")
+                geo.relabel(lat_label, self._custom_lat_lon['lat'])
+                geo.relabel(lon_label, self._custom_lat_lon['lon'])
+
+        return geo
