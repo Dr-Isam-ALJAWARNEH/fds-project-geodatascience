@@ -7,6 +7,7 @@ Below is an implementation of the GeoTable class that extends the Table class to
 import geopandas as gpd
 from shapely.geometry import Point
 from datascience import Table
+import pandas as pd
 
 class GeoTable(Table):
     """
@@ -37,7 +38,7 @@ class GeoTable(Table):
             A GeoTable instance with a geometry column created from lon_col and lat_col.
         """
         # Read the CSV file into a pandas DataFrame
-        df = pandas.read_csv(filepath_or_buffer, *args, **kwargs)
+        df = pd.read_csv(filepath_or_buffer, *args, **kwargs)
 
         # Convert longitude and latitude columns into a geometry column
         geometry = [Point(xy) for xy in zip(df[lon_col], df[lat_col])]
