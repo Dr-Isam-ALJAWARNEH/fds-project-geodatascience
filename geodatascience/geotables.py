@@ -42,22 +42,44 @@ class GeoTable(Table):
         Returns:
             A GeoTable instance with a geometry column created from lon_col and lat_col.
         """
-        # Read the CSV file into a pandas DataFrame
-        df = pd.read_csv(filepath_or_buffer, *args, **kwargs)
+        try:
+            # Read the CSV file into a pandas DataFrame
+            df = pd.read_csv(filepath_or_buffer, *args, **kwargs)
 
-        # Convert longitude and latitude columns into a geometry column
-        geometry = [Point(xy) for xy in zip(df[lon_col], df[lat_col])]
+            # Check if required columns exist
+            if lon_col not in df.columns:
+                raise KeyError(f"Column '{lon_col}' for longitude not found in CSV file.")
+            if lat_col not in df.columns:
+                raise KeyError(f"Column '{lat_col}' for latitude not found in CSV file.")
 
-        # Create a GeoDataFrame
-        gdf = gpd.GeoDataFrame(df, geometry=geometry, crs=crs)
+            # Check for valid longitude and latitude values (ensure they are numeric)
+            if not pd.to_numeric(df[lon_col], errors='coerce').notnull().all():
+                raise ValueError(f"Column '{lon_col}' contains non-numeric values or invalid data.")
+            if not pd.to_numeric(df[lat_col], errors='coerce').notnull().all():
+                raise ValueError(f"Column '{lat_col}' contains non-numeric values or invalid data.")
 
-        # Convert the GeoDataFrame into a GeoTable
-        geo_table = cls.from_df(gdf)
+            # Convert longitude and latitude columns into a geometry column
+            geometry = [Point(xy) for xy in zip(df[lon_col], df[lat_col])]
 
-        # Store the geometry column name
-        geo_table._geometry = "geometry"
+            # Create a GeoDataFrame
+            gdf = gpd.GeoDataFrame(df, geometry=geometry, crs=crs)
 
-        return geo_table
+            # Convert the GeoDataFrame into a GeoTable
+            geo_table = cls.from_df(gdf)
+
+            # Store the geometry column name
+            geo_table._geometry = "geometry"
+
+            return geo_table
+
+        except FileNotFoundError:
+            print(f"Error: The file at '{filepath_or_buffer}' was not found.")
+        except KeyError as e:
+            print(f"Error: {e}")
+        except ValueError as e:
+            print(f"Error: {e}")
+        except Exception as e:
+            print(f"An unexpected error occurred: {e}")
 
     def to_geodataframe(self):
         """
