@@ -137,3 +137,23 @@ class GeoTable(Table):
         plt.show()
 
 
+    def set_lat_lon_columns(self, lat_name=None, lon_name=None):
+        """
+        Manually sets custom column names to be used for latitude and longitude.
+
+        This allows users to specify which columns in the table represent geographic
+        coordinates, even if the column names differ from common conventions (e.g.,
+        using names in other languages or domain-specific terms).
+
+        Once set, these names will take priority during any automatic detection or
+        conversion (e.g., creating geometries or converting to a GeoDataFrame).
+
+        Parameters:
+            lat_name (str): The name of the column representing latitude.
+            lon_name (str): The name of the column representing longitude.
+
+        Example:
+            geo.set_lat_lon_columns("šířka", "délka")
+        """
+        self._custom_lat_lon['lat'] = lat_name
+        self._custom_lat_lon['lon'] = lon_name
