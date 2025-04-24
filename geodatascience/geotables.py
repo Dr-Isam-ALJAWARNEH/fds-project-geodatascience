@@ -4,6 +4,7 @@ To extend the abstraction of converting a CSV into a table to handle geospatial 
 Below is an implementation of the GeoTable class that extends the Table class to handle geospatial data:
 """
 
+import geohash2
 import geopandas as gpd
 from shapely.geometry import Point
 from datascience import Table
@@ -84,6 +85,20 @@ class GeoTable(Table):
             print(f"Error: {e}")
         except Exception as e:
             print(f"An unexpected error occurred: {e}")
+
+    def add_geohash(self, lon_col, lat_col, precision=7):
+        """
+        Adds a geohash column to the GeoTable based on latitude and longitude columns.
+        
+        Args:
+            lon_col (str): The name of the longitude column.
+            lat_col (str): The name of the latitude column.
+            precision (int): The precision of the geohash (default is 7 characters).
+        """
+        self.append_column('geohash', [
+            geohash2.encode(self.column(lat_col)[i], self.column(lon_col)[i], precision=precision)
+            for i in range(self.num_rows)
+        ])
 
     def to_geodataframe(self):
         """
