@@ -28,7 +28,7 @@ class GeoTable(Table):
         }
 
     @classmethod
-    def from_csv(cls, filepath_or_buffer, lon_col, lat_col, crs="EPSG:4326", *args, **kwargs):
+    def from_csv(cls, filepath_or_buffer, lon_col, lat_col, crs="EPSG:4326", geohash_precision=7, *args, **kwargs):
         """
         Read a CSV file and convert it into a GeoTable with a geometry column.
 
@@ -61,14 +61,18 @@ class GeoTable(Table):
             # Convert longitude and latitude columns into a geometry column
             geometry = [Point(xy) for xy in zip(df[lon_col], df[lat_col])]
 
+            # Add geohash column
+            df['geohash'] = df.apply(lambda row: geohash2.encode(row[lat_col], row[lon_col], precision=geohash_precision), axis=1)
+
             # Create a GeoDataFrame
             gdf = gpd.GeoDataFrame(df, geometry=geometry, crs=crs)
 
             # Convert the GeoDataFrame into a GeoTable
             geo_table = cls.from_df(gdf)
 
-            # Store the geometry column name
+            # Store the geometry and geohash column names
             geo_table._geometry = "geometry"
+            geo_table._geohash = "geohash"
 
             return geo_table
 
