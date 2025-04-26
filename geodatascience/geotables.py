@@ -100,6 +100,37 @@ class GeoTable(Table):
             for i in range(self.num_rows)
         ])
 
+
+    @classmethod
+    def read_geojson(cls, filepath_or_buffer, *args, **kwargs):
+        """
+        Reads a GeoJSON file using geopandas.read_file and converts it into a GeoTable.
+        
+        Args:
+            filepath_or_buffer (str): Path to the GeoJSON file.
+            *args, **kwargs: Additional arguments passed to geopandas.read_file.
+        
+        Returns:
+            GeoTable: A GeoTable instance with geometry data from the GeoJSON file.
+        """
+        try:
+            # Read the GeoJSON file into a GeoDataFrame
+            gdf = gpd.read_file(filepath_or_buffer, *args, **kwargs)
+
+            # Convert the GeoDataFrame into a GeoTable
+            geo_table = cls.from_df(gdf)
+
+            # Store the geometry column name
+            geo_table._geometry = "geometry"
+
+            return geo_table
+
+        except FileNotFoundError:
+            print(f"Error: The file at '{filepath_or_buffer}' was not found.")
+        except Exception as e:
+            print(f"An error occurred while reading the GeoJSON file: {e}")
+            
+
     def to_geodataframe(self):
         """
         Convert the GeoTable back into a GeoDataFrame.
