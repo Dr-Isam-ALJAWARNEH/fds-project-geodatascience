@@ -329,7 +329,7 @@ class GeoTable(Table):
             geo.append_column(label, new_table.column(label))
 
         if self._geometry in args[::2]:
-            print("🧪 Using existing geometry column.")
+            print("Using existing geometry column.")
             return geo
 
         lat_label, lon_label = None, None
