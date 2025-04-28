@@ -356,3 +356,41 @@ class GeoTable(Table):
                 geo.relabel(lon_label, self._custom_lat_lon['lon'])
 
         return geo
+
+def select(self, *column_labels):
+    """
+    Override the select method to maintain geospatial integrity.
+
+    If latitude and longitude columns are selected (without geometry),
+    automatically reconstruct the geometry column.
+    """
+    # Call the base Table select
+    new_table = super().select(*column_labels)
+
+    # Wrap it again into a GeoTable
+    geo = GeoTable()
+
+    for label in new_table.labels:
+        geo.append_column(label, new_table.column(label))
+
+    # Case 1: if 'geometry' was selected, no need to do anything extra
+    if self._geometry in geo.labels:
+        return geo
+
+    # Case 2: Try to reconstruct geometry if latitude and longitude are present
+    lat_label, lon_label = None, None
+
+    # Use custom labels if set
+    if self._is_lat_lon_set():
+        lat_label = self._custom_lat_lon['lat']
+        lon_label = self._custom_lat_lon['lon']
+
+    else:
+        lat_label, lon_label = self._infer_lat_lon_columns()
+
+    if lat_label and lon_label and lat_label in geo.labels and lon_label in geo.labels:
+        # Create geometry from lat/lon
+        geometry = [Point(lon, lat) for lat, lon in zip(geo.column(lat_label), geo.column(lon_label))]
+        geo.append_column('geometry', geometry)
+
+    return geo
