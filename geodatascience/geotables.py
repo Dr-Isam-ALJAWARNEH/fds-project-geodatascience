@@ -11,6 +11,9 @@ from datascience import Table
 import pandas as pd
 import re
 import matplotlib.pyplot as plt
+
+
+
 class GeoTable(Table):
     """
     A GeoTable is an extension of the Table class that supports geospatial data.
@@ -298,6 +301,23 @@ class GeoTable(Table):
         print(f"Found {lat_col} and {lon_col}")
         return lat_col, lon_col
     
+
+    @classmethod
+    def _copy_geo_state(self, target):
+        """Safely copies only GeoTable-specific state to another instance"""
+
+        # Ensure defaults exist if somehow undefined
+        target._geometry = getattr(self, '_geometry', 'geometry')
+        target._custom_lat_lon = getattr(self, '_custom_lat_lon', {'lat': None, 'lon': None}).copy()
+        print(target)
+        return target
+
+
+    def _set_geo_state(self):
+        """Sets GeoTable-specific state"""
+
+        self._geometry = 'geometry' # Set geometry
+        return self
 
 
     def with_columns(self, *args):
