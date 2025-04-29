@@ -320,6 +320,8 @@ class GeoTable(Table):
         return self
 
 
+
+
     def with_columns(self, *args):
         """
         Returns a new GeoTable with additional or replaced columns.
@@ -343,20 +345,15 @@ class GeoTable(Table):
         """
         # Use the superclass method to get a new Table
         new_table = Table().with_columns(*args)
-        
-        # Ensure 'geometry' is has same number of input rows for correct insertion of other columns
-        if self._geometry not in new_table.labels:
-            new_table.append_column('geometry', [None] * new_table.num_rows)
 
-        # Convert to GeoTable
-        geo = GeoTable()
+        geo = GeoTable()._copy_geo_state(self)
+        geo.append_column('geometry', [None] * new_table.num_rows)
 
-        # Copy columns from new_table to geo
+
         for label in new_table.labels:
             geo.append_column(label, new_table.column(label))
 
-        if self._geometry in args[::2]:
-            print("Using existing geometry column.")
+        if self._geometry in args:
             return geo
 
         lat_label, lon_label = None, None
@@ -374,7 +371,6 @@ class GeoTable(Table):
         if lat_label and lon_label:
             # Create geometry column
             geometry = [Point(lon, lat) for lat, lon in zip(geo.column(lat_label), geo.column(lon_label))]
-            geo.drop('geometry')
             geo.append_column('geometry', geometry)
 
             if self._is_lat_lon_set() and self._custom_lat_lon['lat'] != lat_label and self._custom_lat_lon['lon'] != lon_label:
@@ -383,6 +379,8 @@ class GeoTable(Table):
                 geo.relabel(lon_label, self._custom_lat_lon['lon'])
 
         return geo
+
+
 
     def select(self, *column_labels):
         """
