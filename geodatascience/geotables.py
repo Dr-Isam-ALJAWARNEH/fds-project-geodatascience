@@ -384,41 +384,72 @@ class GeoTable(Table):
 
     def select(self, *column_labels):
         """
-        Override the select method to maintain geospatial integrity.
-
-        If latitude and longitude columns are selected (without geometry),
-        automatically reconstruct the geometry column.
+        Select columns from the GeoTable while preserving geospatial properties.
+        
+        This method mimics the behavior of GeoDataFrame.select() where:
+        - Selecting ONLY the geometry column returns a GeoTable
+        - Selecting geometry PLUS other columns returns a GeoTable  
+        - Selecting ONLY non-geometry columns returns a regular Table
+        
+        Parameters
+        ----------
+        *column_labels : str
+            One or more column names to select
+            
+        Returns
+        -------
+        GeoTable or Table
+            Returns GeoTable if geometry column is selected (alone or with others),
+            otherwise returns a regular Table
+            
+        Notes
+        -----
+        Behavior matches GeoPandas GeoDataFrame:
+        - Dropping all geometry columns converts to regular DataFrame
+        - Keeping geometry column maintains geospatial properties
+        
+        Examples
+        --------
+        >>> gt = GeoTable().with_columns(
+        ...     'City', ['Paris', 'Berlin'],
+        ...     'Latitude', [48.8566, 52.52],
+        ...     'Longitude', [2.3522, 13.405]
+        ... )
+        
+        # Returns GeoTable (geometry selected)
+        >>> geo = gt.select('geometry')  
+        
+        # Returns GeoTable (geometry + others)
+        >>> geo_city = gt.select('geometry', 'City')
+        
+        # Returns regular Table (no geometry)
+        >>> cities = gt.select('City')  
         """
-        # Call the base Table select
-        new_table = super().select(*column_labels)
-
-        # Wrap it again into a GeoTable
-        geo = GeoTable()
-
-        for label in new_table.labels:
-            geo.append_column(label, new_table.column(label))
-
-        # Case 1: if 'geometry' was selected, no need to do anything extra
-        if self._geometry in geo.labels:
+        # Convert to list for easier manipulation
+        columns = list(column_labels)
+        
+        # Case 1: Selecting ONLY the geometry column
+        if columns == [self._geometry]:
+            
+            geo = GeoTable()
+            geo._set_geo_state()
+            geo.append_column(self._geometry, self.column(self._geometry))
             return geo
+        
+        # Case 2: Selecting geometry PLUS other columns
+        elif self._geometry in columns:
 
-        # Case 2: Try to reconstruct geometry if latitude and longitude are present
-        lat_label, lon_label = None, None
-
-        # Use custom labels if set
-        if self._is_lat_lon_set():
-            lat_label = self._custom_lat_lon['lat']
-            lon_label = self._custom_lat_lon['lon']
-
+            geo = GeoTable()
+            geo._set_geo_state()
+            for label in columns:
+                geo.append_column(label, self.column(label))
+            return geo
+        
+        # Case 3: Selecting non-geometry columns
         else:
-            lat_label, lon_label = self._infer_lat_lon_columns()
+            return Table().with_columns(*[(label, self.column(label)) for label in columns])
 
-        if lat_label and lon_label and lat_label in geo.labels and lon_label in geo.labels:
-            # Create geometry from lat/lon
-            geometry = [Point(lon, lat) for lat, lon in zip(geo.column(lat_label), geo.column(lon_label))]
-            geo.append_column('geometry', geometry)
 
-        return geo
     
     def spatial_join(self, other, how='inner', predicate='intersects'):
         """
