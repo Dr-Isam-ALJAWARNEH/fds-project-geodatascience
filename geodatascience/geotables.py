@@ -10,7 +10,7 @@ from shapely.geometry import Point
 from datascience import Table
 import pandas as pd
 import re
-
+import matplotlib.pyplot as plt
 class GeoTable(Table):
     """
     A GeoTable is an extension of the Table class that supports geospatial data.
@@ -401,3 +401,70 @@ class GeoTable(Table):
             geo.append_column('geometry', geometry)
 
         return geo
+    
+    def spatial_join(self, other, how='inner', predicate='intersects'):
+        """
+        Perform a spatial join between this GeoTable and another GeoTable.
+
+        Args:
+            other (GeoTable): Another GeoTable to join with.
+            how (str): Type of join: 'left', 'right', 'inner' (default: 'inner').
+            predicate (str): Spatial predicate: 'intersects', 'within', 'contains', etc. (default: 'intersects').
+
+        Returns:
+            GeoTable: Result of the spatial join as a new GeoTable.
+        """
+        if not isinstance(other, GeoTable):
+            raise TypeError("The 'other' argument must be a GeoTable.")
+
+        gdf_self = self.to_geodataframe().copy()
+        gdf_other = other.to_geodataframe().copy()
+
+        # Ensure both are in the same CRS
+        gdf_self = gdf_self.set_crs("EPSG:4326")
+        gdf_other = gdf_other.set_crs("EPSG:4326")
+
+        try:
+            joined = gpd.sjoin(gdf_self, gdf_other, how=how, predicate=predicate)
+
+            # Clean up index columns if present
+            joined.reset_index(drop=True, inplace=True)
+            if "index_right" in joined.columns:
+                joined.drop(columns=["index_right"], inplace=True)
+
+            return GeoTable.from_df(joined)
+
+        except Exception as e:
+            print(f"Spatial join failed: {e}")
+            return None
+
+    def plot_sjoined_interactive(self, neighbor_col='geohash', zoom=12):
+        """
+        Plots GeoTable points, grouping by the same 'neighbor' in the same color.
+
+        Args:
+            neighbor_col (str): Column name indicating neighborhood/grouping (e.g., 'geohash' or cluster label).
+            zoom (int): Zoom level for the base map.
+        """
+        if self._geometry not in self.labels:
+            raise ValueError(f"Geometry column '{self._geometry}' not found.")
+
+        if neighbor_col not in self.labels:
+            raise ValueError(f"Neighbor column '{neighbor_col}' not found.")
+
+        # Convert to GeoDataFrame
+        gdf = self.to_geodataframe().set_crs("EPSG:4326")
+        gdf = gdf.to_crs("EPSG:3857")
+
+        # Plot
+        fig, ax = plt.subplots(figsize=(10, 8))
+        gdf.plot(ax=ax, column=neighbor_col, cmap='tab20', legend=True,
+                markersize=40, alpha=0.8, edgecolor='black')
+
+        # Add basemap
+        ctx.add_basemap(ax, source=ctx.providers.CartoDB.Positron, zoom=zoom)
+
+        ax.set_axis_off()
+        plt.tight_layout()
+        plt.title(f"Points colored by '{neighbor_col}'")
+        plt.show()
