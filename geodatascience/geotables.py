@@ -594,3 +594,27 @@ class GeoTable(Table):
         plt.tight_layout()
         plt.title(f"Points colored by '{neighbor_col}'")
         plt.show()
+
+
+
+    def show(self, max_rows=10):
+        """
+        Show the GeoTable in terminal or notebook.
+        Falls back to plain text in terminal.
+        """
+        import sys
+
+        if 'ipykernel' in sys.modules:
+            # We're in Jupyter
+            # from IPython.display import display, HTML
+            # display(HTML(super()._repr_html_()))
+            super().show()
+            
+        else:
+            # Terminal fallback
+            print("\n".join([
+                "\t".join(self.labels)
+            ] + [
+                "\t".join(str(v) for v in self.row(i))
+                for i in range(min(self.num_rows, max_rows))
+            ]))
