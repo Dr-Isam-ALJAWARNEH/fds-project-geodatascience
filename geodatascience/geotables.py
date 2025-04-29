@@ -507,6 +507,25 @@ class GeoTable(Table):
         return geo
 
     
+
+    def where(self, column_or_predicate, value=None):
+        """
+        Enhanced where() with geospatial error handling.
+        """
+        try:
+            return super().where(column_or_predicate, value)
+        except AttributeError as e:
+            if 'within' in str(e) or 'intersects' in str(e):
+                raise AttributeError(
+                    f"Column '{column_or_predicate}' must contain Shapely geometries. "
+                    "Ensure you:\n"
+                    "1. Created the table using from_geojson()/from_csv()\n"
+                    "2. Didn't accidentally drop the geometry column"
+                ) from e
+            raise  # Re-raises the original AttributeError unchanged
+
+
+
     def spatial_join(self, other, how='inner', predicate='intersects'):
         """
         Perform a spatial join between this GeoTable and another GeoTable.
@@ -542,6 +561,8 @@ class GeoTable(Table):
         except Exception as e:
             print(f"Spatial join failed: {e}")
             return None
+
+
 
     def plot_sjoined_interactive(self, neighbor_col='geohash', zoom=12):
         """
