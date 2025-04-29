@@ -146,30 +146,37 @@ class GeoTable(Table):
 
         return gdf
 
-    def distance_to(self, other, ref_index=0, new_column='distance_to_ref'):
+    def distance_to(self, other=None, ref_index=0, new_column='distance_to_ref', same_table=False):
         """
-        Computes distance in meters from each point in this GeoTable to a reference point
-        in another GeoTable.
+        Computes distance in meters from each point in this GeoTable to a reference point,
+        either from another GeoTable or from itself.
 
         Args:
-            other (GeoTable): Another GeoTable containing reference point.
-            ref_index (int): Index of the reference point in the other GeoTable.
+            other (GeoTable or None): Another GeoTable containing the reference point, or None if same_table is True.
+            ref_index (int): Index of the reference point in the other GeoTable or this one if same_table is True.
             new_column (str): Column name to store distances.
+            same_table (bool): If True, use this table as the reference table (i.e., compare points to a point in self).
         """
-        if not isinstance(other, GeoTable):
-            raise TypeError("Other must be a GeoTable.")
-
-        gdf_self = self.to_geodataframe().set_crs("EPSG:4326")
-        gdf_other = other.to_geodataframe().set_crs("EPSG:4326")
-
-        if ref_index < 0 or ref_index >= len(gdf_other):
-            raise IndexError(f"Reference index {ref_index} out of bounds.")
+        # Validate input
+        if same_table:
+            if ref_index < 0 or ref_index >= self.num_rows:
+                raise IndexError(f"Reference index {ref_index} is out of bounds for this GeoTable.")
+            ref_gdf = self.to_geodataframe().set_crs("EPSG:4326")
+            gdf_self = ref_gdf
+            ref_point = ref_gdf.to_crs("EPSG:3857").geometry.iloc[ref_index]
+        else:
+            if not isinstance(other, GeoTable):
+                raise TypeError("If same_table is False, 'other' must be a GeoTable.")
+            gdf_self = self.to_geodataframe().set_crs("EPSG:4326")
+            ref_gdf = other.to_geodataframe().set_crs("EPSG:4326")
+            if ref_index < 0 or ref_index >= len(ref_gdf):
+                raise IndexError(f"Reference index {ref_index} is out of bounds for the other GeoTable.")
+            ref_point = ref_gdf.to_crs("EPSG:3857").geometry.iloc[ref_index]
 
         # Reproject to metric CRS for distance calculation
         gdf_self_proj = gdf_self.to_crs("EPSG:3857")
-        ref_point = gdf_other.to_crs("EPSG:3857").geometry.iloc[ref_index]
-
         distances = gdf_self_proj.geometry.distance(ref_point)
+
         self[new_column] = distances.round(1).tolist()
 
     def plot(self, zoom=12, **kwargs):
