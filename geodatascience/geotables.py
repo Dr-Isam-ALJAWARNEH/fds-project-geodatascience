@@ -450,6 +450,62 @@ class GeoTable(Table):
             return Table().with_columns(*[(label, self.column(label)) for label in columns])
 
 
+
+    def drop(self, *column_labels):
+        """
+        Drop columns from the GeoTable while handling geospatial properties.
+        
+        Mimics GeoPandas behavior where:
+        - Dropping the geometry column returns a regular Table
+        - Keeping the geometry column returns a GeoTable
+        
+        Parameters
+        ----------
+        *column_labels : str
+            One or more column names to drop
+            
+        Returns
+        -------
+        Table or GeoTable
+            Returns a regular Table if geometry column is dropped,
+            otherwise returns a GeoTable with geospatial capabilities
+            
+        Examples
+        --------
+        >>> gt = GeoTable().with_columns(
+        ...     'City', ['Paris', 'Berlin'],
+        ...     'Latitude', [48.8566, 52.52],
+        ...     'Longitude', [2.3522, 13.405]
+        ... )
+        
+        # Returns regular Table (geometry dropped)
+        >>> no_geo = gt.drop('geometry')  
+        
+        # Returns GeoTable (keeping geometry)
+        >>> no_city = gt.drop('City')  
+        
+        # Returns regular Table (geometry explicitly dropped)
+        >>> no_geo = gt.drop('geometry', 'City')  
+        """
+        # Convert to list for easier manipulation
+        drop_cols = list(column_labels)
+        
+        # Case 1: Selecting ONLY the geometry column
+        if self._geometry in drop_cols:
+            dropped = Table().with_columns(*[(label, self.column(label)) for label in self.labels if label not in drop_cols])
+            return dropped
+        
+        # Convert to GeoTable and copy state
+        geo = GeoTable()
+        geo._set_geo_state()
+        
+        # Add remaining columns
+        for label in self.labels:
+            if label not in drop_cols:
+              geo.append_column(label, self.column(label))
+            
+        return geo
+
     
     def spatial_join(self, other, how='inner', predicate='intersects'):
         """
