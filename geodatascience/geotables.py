@@ -468,3 +468,96 @@ class GeoTable(Table):
         plt.tight_layout()
         plt.title(f"Points colored by '{neighbor_col}'")
         plt.show()
+
+    def spatial_groupby_mean(self, regions_table, on='geometry', features=None, agg_name_prefix='mean_', predicate='intersects'):
+        """
+        Performs a spatial join and groups point features by region geometries to compute mean values.
+        
+        Args:
+            regions_table (GeoTable): Polygon GeoTable to group by.
+            on (str): Geometry column to group by (default: 'geometry').
+            features (list): List of feature columns in self to compute mean on.
+            agg_name_prefix (str): Prefix for new aggregated columns.
+            predicate (str): Spatial predicate for join (default: 'intersects').
+        
+        Returns:
+            GeoTable: The regions_table with new mean feature columns.
+        """
+        joined = self.spatial_join(regions_table, how='inner', predicate=predicate)
+        gdf = joined.to_geodataframe()
+
+        if features is None:
+            features = gdf.select_dtypes(include=['float', 'int']).columns.drop('geometry', errors='ignore').tolist()
+
+        grouped = gdf.groupby(gdf.index)[features].mean().add_prefix(agg_name_prefix)
+        
+        result_gdf = regions_table.to_geodataframe().join(grouped, how='left')
+        return GeoTable.from_df(result_gdf)
+
+    def spatial_correlation_matrix(self, method='pearson'):
+        """
+        Computes correlation matrix for all numeric columns, excluding geometry.
+        
+        Args:
+            method (str): Correlation method ('pearson', 'spearman', 'kendall').
+        
+        Returns:
+            pd.DataFrame: Correlation matrix.
+        """
+        df = self.to_df().copy()
+        df_numeric = df.select_dtypes(include=['float', 'int']).drop(columns=['geometry'], errors='ignore')
+        return df_numeric.corr(method=method)
+    def plot_correlation_heatmap(self, method='pearson', figsize=(10, 8), cmap='coolwarm', annot=True):
+        """
+        Plots a heatmap of the correlation matrix for numeric columns.
+        
+        Args:
+            method (str): Correlation method.
+            figsize (tuple): Figure size.
+            cmap (str): Colormap.
+            annot (bool): Whether to annotate cells.
+        """
+        import seaborn as sns
+        import matplotlib.pyplot as plt
+
+        corr = self.spatial_correlation_matrix(method)
+        plt.figure(figsize=figsize)
+        sns.heatmap(corr, cmap=cmap, annot=annot, fmt=".2f", square=True)
+        plt.title(f'{method.title()} Correlation Heatmap')
+        plt.show()
+
+    def plot_spatial_scatter(self, x_col, y_col, label_points=False):
+        """
+        Plots a scatter plot between two numeric columns in the GeoTable.
+
+        Args:
+            x_col (str): Name of the x-axis feature (e.g., 'mean_pm25').
+            y_col (str): Name of the y-axis feature (e.g., 'mean_humidity').
+            label_points (bool): Whether to label each point with its index or name.
+        """
+        import matplotlib.pyplot as plt
+
+        df = self.to_df()
+
+        if x_col not in df.columns or y_col not in df.columns:
+            raise ValueError(f"Columns '{x_col}' and/or '{y_col}' not found.")
+
+        x = df[x_col]
+        y = df[y_col]
+
+        plt.figure(figsize=(8, 6))
+        plt.scatter(x, y, color='blue', alpha=0.6, edgecolor='k')
+
+        if label_points:
+            for i, (xi, yi) in enumerate(zip(x, y)):
+                plt.text(xi, yi, str(i), fontsize=8, alpha=0.7)
+
+        plt.xlabel(x_col)
+        plt.ylabel(y_col)
+        plt.title(f"Scatter Plot: {y_col} vs. {x_col}")
+        plt.grid(True)
+        plt.tight_layout()
+        plt.show()
+
+
+ 
