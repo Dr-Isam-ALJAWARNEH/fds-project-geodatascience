@@ -3,7 +3,7 @@ To extend the abstraction of converting a CSV into a table to handle geospatial 
 
 Below is an implementation of the GeoTable class that extends the Table class to handle geospatial data:
 """
-
+""
 import geohash2
 import geopandas as gpd
 from shapely.geometry import Point
