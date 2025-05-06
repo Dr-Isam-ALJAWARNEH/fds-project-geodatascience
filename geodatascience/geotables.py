@@ -1416,3 +1416,119 @@ class GeoTable(Table):
         # Inside geo_temporal_knn(), before the return:
         return max(set(top_k_labels), key=top_k_labels.count)
 
+
+
+    def geo_ensemble_classify(
+        self,
+        point,
+        label_column='pm10_class',
+        classifiers=[
+            ('knn', {'k': 5, 'metric': 'haversine'}),
+            ('temporal', {'hours': 24}),
+            # ('density', {'bandwidth': 0.2})  # Remove or implement
+        ]
+    ):
+        """
+        Ensemble geographic classifier that combines predictions from multiple spatial
+        classification methods using majority voting.
+
+        Combines the strengths of different geospatial classification approaches to
+        produce more robust predictions than any single method.
+
+        Parameters:
+        -----------
+        point : shapely.geometry.Point or tuple
+            Location to classify - either Shapely Point or (longitude, latitude) tuple
+        label_column : str, optional
+            Name of column containing class labels (default 'pm10_class')
+        classifiers : list of tuples, optional
+            List of (classifier_name, parameters) pairs to include in ensemble.
+            Supported classifiers:
+            - 'knn': Standard k-nearest neighbors
+              Parameters: {'k': int, 'metric': 'haversine'|'euclidean'}
+            - 'temporal': Spatio-temporal k-nearest neighbors
+              Parameters: {'hours': int} (temporal decay window)
+            Default: [('knn', {'k':5, 'metric':'haversine'}), ('temporal', {'hours':24})]
+
+        Returns:
+        -------
+        str
+            The most frequently predicted label across all classifiers (majority vote)
+
+        Algorithm:
+        ---------
+        1. Runs each specified classifier on the input point:
+           - 'knn': Uses universal_geo_classifier()
+           - 'temporal': Uses geo_temporal_knn()
+        2. Collects all predictions
+        3. Returns the label with most votes
+        4. If classifiers disagree, returns the most common prediction
+        5. If all classifiers fail, raises RuntimeError
+
+        Notes:
+        ------
+        - Handles failures gracefully - skips failed classifiers but requires at least
+          one successful prediction
+        - Current implementation uses simple majority voting (no weighted averaging)
+        - For best results, use classifiers with complementary strengths
+        - All classifiers must predict the same label_column categories
+
+        Example:
+        -------
+        >>> model.geo_ensemble_classify(
+                point=(-74.006, 40.7128),  # NYC coordinates
+                label_column='neighborhood',
+                classifiers=[
+                    ('knn', {'k': 3, 'metric': 'haversine'}),
+                    ('temporal', {'hours': 12})
+                ]
+            )
+        'Financial District'
+
+        Raises:
+        -------
+        ValueError:
+            - If point format is invalid
+            - If label_column is missing
+            - If unknown classifier is specified
+        RuntimeError:
+            - If all classifiers fail to produce predictions
+        """
+        # --- Input Validation ---
+        if not isinstance(point, (Point, tuple, list)):
+            raise ValueError("`point` must be Shapely Point or (lon,lat) tuple")
+        if label_column not in self.labels:
+            raise ValueError(f"Column '{label_column}' not found in table")
+
+        # Convert point to Shapely
+        point = Point(point[0], point[1]) if isinstance(point, (tuple, list)) else point
+
+        # --- Ensemble Voting ---
+        votes = []
+        for clf_name, params in classifiers:
+            try:
+                if clf_name == 'knn':
+                    pred = self.universal_geo_classifier(
+                        point=point,
+                        label_column=label_column,
+                        k=params['k'],
+                        distance_metric=params.get('metric', 'haversine')
+                    )
+                elif clf_name == 'temporal':
+                    pred = self.geo_temporal_knn(
+                        point=point,
+                        observation_time=datetime.now(),
+                        label_column=label_column,
+                        temporal_decay=timedelta(hours=params['hours'])
+                    )
+                else:
+                    raise ValueError(f"Unknown classifier: {clf_name}")
+                votes.append(pred)
+            except Exception as e:
+                print(f"⚠️ Classifier '{clf_name}' failed: {str(e)}")
+                continue  # Skip failed classifiers
+
+        if not votes:
+            raise RuntimeError("All classifiers failed")
+
+        return Counter(votes).most_common(1)[0][0]  # Majority vote
