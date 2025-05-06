@@ -611,7 +611,7 @@ class GeoTable(Table):
             # We're in Jupyter
             # from IPython.display import display, HTML
             # display(HTML(super()._repr_html_()))
-            super().show()
+            super().show(max_rows)
             
         else:
             # Terminal fallback
