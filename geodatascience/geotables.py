@@ -11,6 +11,9 @@ from datascience import Table
 import pandas as pd
 import re
 import matplotlib.pyplot as plt
+
+
+
 class GeoTable(Table):
     """
     A GeoTable is an extension of the Table class that supports geospatial data.
@@ -299,6 +302,25 @@ class GeoTable(Table):
         return lat_col, lon_col
     
 
+    @classmethod
+    def _copy_geo_state(self, target):
+        """Safely copies only GeoTable-specific state to another instance"""
+
+        # Ensure defaults exist if somehow undefined
+        target._geometry = getattr(self, '_geometry', 'geometry')
+        target._custom_lat_lon = getattr(self, '_custom_lat_lon', {'lat': None, 'lon': None}).copy()
+        print(target)
+        return target
+
+
+    def _set_geo_state(self):
+        """Sets GeoTable-specific state"""
+
+        self._geometry = 'geometry' # Set geometry
+        return self
+
+
+
 
     def with_columns(self, *args):
         """
@@ -323,20 +345,15 @@ class GeoTable(Table):
         """
         # Use the superclass method to get a new Table
         new_table = Table().with_columns(*args)
-        
-        # Ensure 'geometry' is has same number of input rows for correct insertion of other columns
-        if self._geometry not in new_table.labels:
-            new_table.append_column('geometry', [None] * new_table.num_rows)
 
-        # Convert to GeoTable
-        geo = GeoTable()
+        geo = GeoTable()._copy_geo_state(self)
+        geo.append_column('geometry', [None] * new_table.num_rows)
 
-        # Copy columns from new_table to geo
+
         for label in new_table.labels:
             geo.append_column(label, new_table.column(label))
 
-        if self._geometry in args[::2]:
-            print("Using existing geometry column.")
+        if self._geometry in args:
             return geo
 
         lat_label, lon_label = None, None
@@ -354,7 +371,6 @@ class GeoTable(Table):
         if lat_label and lon_label:
             # Create geometry column
             geometry = [Point(lon, lat) for lat, lon in zip(geo.column(lat_label), geo.column(lon_label))]
-            geo.drop('geometry')
             geo.append_column('geometry', geometry)
 
             if self._is_lat_lon_set() and self._custom_lat_lon['lat'] != lat_label and self._custom_lat_lon['lon'] != lon_label:
@@ -364,44 +380,152 @@ class GeoTable(Table):
 
         return geo
 
+
+
     def select(self, *column_labels):
         """
-        Override the select method to maintain geospatial integrity.
-
-        If latitude and longitude columns are selected (without geometry),
-        automatically reconstruct the geometry column.
+        Select columns from the GeoTable while preserving geospatial properties.
+        
+        This method mimics the behavior of GeoDataFrame.select() where:
+        - Selecting ONLY the geometry column returns a GeoTable
+        - Selecting geometry PLUS other columns returns a GeoTable  
+        - Selecting ONLY non-geometry columns returns a regular Table
+        
+        Parameters
+        ----------
+        *column_labels : str
+            One or more column names to select
+            
+        Returns
+        -------
+        GeoTable or Table
+            Returns GeoTable if geometry column is selected (alone or with others),
+            otherwise returns a regular Table
+            
+        Notes
+        -----
+        Behavior matches GeoPandas GeoDataFrame:
+        - Dropping all geometry columns converts to regular DataFrame
+        - Keeping geometry column maintains geospatial properties
+        
+        Examples
+        --------
+        >>> gt = GeoTable().with_columns(
+        ...     'City', ['Paris', 'Berlin'],
+        ...     'Latitude', [48.8566, 52.52],
+        ...     'Longitude', [2.3522, 13.405]
+        ... )
+        
+        # Returns GeoTable (geometry selected)
+        >>> geo = gt.select('geometry')  
+        
+        # Returns GeoTable (geometry + others)
+        >>> geo_city = gt.select('geometry', 'City')
+        
+        # Returns regular Table (no geometry)
+        >>> cities = gt.select('City')  
         """
-        # Call the base Table select
-        new_table = super().select(*column_labels)
-
-        # Wrap it again into a GeoTable
-        geo = GeoTable()
-
-        for label in new_table.labels:
-            geo.append_column(label, new_table.column(label))
-
-        # Case 1: if 'geometry' was selected, no need to do anything extra
-        if self._geometry in geo.labels:
+        # Convert to list for easier manipulation
+        columns = list(column_labels)
+        
+        # Case 1: Selecting ONLY the geometry column
+        if columns == [self._geometry]:
+            
+            geo = GeoTable()
+            geo._set_geo_state()
+            geo.append_column(self._geometry, self.column(self._geometry))
             return geo
+        
+        # Case 2: Selecting geometry PLUS other columns
+        elif self._geometry in columns:
 
-        # Case 2: Try to reconstruct geometry if latitude and longitude are present
-        lat_label, lon_label = None, None
-
-        # Use custom labels if set
-        if self._is_lat_lon_set():
-            lat_label = self._custom_lat_lon['lat']
-            lon_label = self._custom_lat_lon['lon']
-
+            geo = GeoTable()
+            geo._set_geo_state()
+            for label in columns:
+                geo.append_column(label, self.column(label))
+            return geo
+        
+        # Case 3: Selecting non-geometry columns
         else:
-            lat_label, lon_label = self._infer_lat_lon_columns()
+            return Table().with_columns(*[(label, self.column(label)) for label in columns])
 
-        if lat_label and lon_label and lat_label in geo.labels and lon_label in geo.labels:
-            # Create geometry from lat/lon
-            geometry = [Point(lon, lat) for lat, lon in zip(geo.column(lat_label), geo.column(lon_label))]
-            geo.append_column('geometry', geometry)
 
+
+    def drop(self, *column_labels):
+        """
+        Drop columns from the GeoTable while handling geospatial properties.
+        
+        Mimics GeoPandas behavior where:
+        - Dropping the geometry column returns a regular Table
+        - Keeping the geometry column returns a GeoTable
+        
+        Parameters
+        ----------
+        *column_labels : str
+            One or more column names to drop
+            
+        Returns
+        -------
+        Table or GeoTable
+            Returns a regular Table if geometry column is dropped,
+            otherwise returns a GeoTable with geospatial capabilities
+            
+        Examples
+        --------
+        >>> gt = GeoTable().with_columns(
+        ...     'City', ['Paris', 'Berlin'],
+        ...     'Latitude', [48.8566, 52.52],
+        ...     'Longitude', [2.3522, 13.405]
+        ... )
+        
+        # Returns regular Table (geometry dropped)
+        >>> no_geo = gt.drop('geometry')  
+        
+        # Returns GeoTable (keeping geometry)
+        >>> no_city = gt.drop('City')  
+        
+        # Returns regular Table (geometry explicitly dropped)
+        >>> no_geo = gt.drop('geometry', 'City')  
+        """
+        # Convert to list for easier manipulation
+        drop_cols = list(column_labels)
+        
+        # Case 1: Selecting ONLY the geometry column
+        if self._geometry in drop_cols:
+            dropped = Table().with_columns(*[(label, self.column(label)) for label in self.labels if label not in drop_cols])
+            return dropped
+        
+        # Convert to GeoTable and copy state
+        geo = GeoTable()
+        geo._set_geo_state()
+        
+        # Add remaining columns
+        for label in self.labels:
+            if label not in drop_cols:
+              geo.append_column(label, self.column(label))
+            
         return geo
+
     
+
+    def where(self, column_or_predicate, value=None):
+        """
+        Enhanced where() with geospatial error handling.
+        """
+        try:
+            return super().where(column_or_predicate, value)
+        except AttributeError as e:
+            if 'within' in str(e) or 'intersects' in str(e):
+                raise AttributeError(
+                    f"Column '{column_or_predicate}' must contain Shapely geometries. "
+                    "Ensure you:\n"
+                    "1. Created the table using from_geojson()/from_csv()\n"
+                    "2. Didn't accidentally drop the geometry column"
+                ) from e
+            raise  # Re-raises the original AttributeError unchanged
+
+
+
     def spatial_join(self, other, how='inner', predicate='intersects'):
         """
         Perform a spatial join between this GeoTable and another GeoTable.
@@ -438,6 +562,8 @@ class GeoTable(Table):
             print(f"Spatial join failed: {e}")
             return None
 
+
+
     def plot_sjoined_interactive(self, neighbor_col='geohash', zoom=12):
         """
         Plots GeoTable points, grouping by the same 'neighbor' in the same color.
@@ -468,6 +594,30 @@ class GeoTable(Table):
         plt.tight_layout()
         plt.title(f"Points colored by '{neighbor_col}'")
         plt.show()
+
+
+
+    def show(self, max_rows=10):
+        """
+        Show the GeoTable in terminal or notebook.
+        Falls back to plain text in terminal.
+        """
+        import sys
+
+        if 'ipykernel' in sys.modules:
+            # We're in Jupyter
+            # from IPython.display import display, HTML
+            # display(HTML(super()._repr_html_()))
+            super().show()
+            
+        else:
+            # Terminal fallback
+            print("\n".join([
+                "\t".join(self.labels)
+            ] + [
+                "\t".join(str(v) for v in self.row(i))
+                for i in range(min(self.num_rows, max_rows))
+            ]))
 
     def spatial_groupby_mean(self, regions_table, on='geometry', features=None, agg_name_prefix='mean_', predicate='intersects'):
         """
@@ -560,4 +710,5 @@ class GeoTable(Table):
         plt.show()
 
 
- 
+
+    
