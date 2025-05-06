@@ -804,6 +804,65 @@ class GeoTable(Table):
 
         print(f"Manual Regression Line: {y_col} = {m:.4f} * {x_col} + {b:.4f}")
 
+    def plot_regression_diagnostics(self, x_col, y_col):
+        """
+        Plots standard linear regression diagnostics for two numeric features.
+
+        Args:
+            x_col (str): Independent variable.
+            y_col (str): Dependent variable.
+        """
+        import matplotlib.pyplot as plt
+        import numpy as np
+        import scipy.stats as stats
+        from sklearn.linear_model import LinearRegression
+        from sklearn.metrics import r2_score
+
+        df = self.to_df()
+
+        if x_col not in df.columns or y_col not in df.columns:
+            raise ValueError(f"Columns '{x_col}' and/or '{y_col}' not found.")
+
+        x = df[x_col].values.reshape(-1, 1)
+        y = df[y_col].values
+
+        model = LinearRegression()
+        model.fit(x, y)
+        y_pred = model.predict(x)
+        residuals = y - y_pred
+        r2 = r2_score(y, y_pred)
+
+        fig, axs = plt.subplots(2, 2, figsize=(12, 10))
+
+        # Scatter + regression
+        axs[0, 0].scatter(x, y, color='skyblue', edgecolor='black', label='Data')
+        axs[0, 0].plot(x, y_pred, color='red', linewidth=2, label='Regression Line')
+        axs[0, 0].set_title(f"Regression Line\nR² = {r2:.4f}")
+        axs[0, 0].set_xlabel(x_col)
+        axs[0, 0].set_ylabel(y_col)
+        axs[0, 0].legend()
+        axs[0, 0].grid(True)
+
+        # Residuals vs Fitted
+        axs[0, 1].scatter(y_pred, residuals, edgecolor='black', alpha=0.6)
+        axs[0, 1].axhline(0, color='red', linestyle='--')
+        axs[0, 1].set_title("Residuals vs Fitted")
+        axs[0, 1].set_xlabel("Predicted")
+        axs[0, 1].set_ylabel("Residuals")
+        axs[0, 1].grid(True)
+
+        # Histogram of residuals
+        axs[1, 0].hist(residuals, bins=20, color='purple', alpha=0.7)
+        axs[1, 0].set_title("Histogram of Residuals")
+        axs[1, 0].set_xlabel("Residual")
+        axs[1, 0].set_ylabel("Frequency")
+
+        # Q-Q plot
+        stats.probplot(residuals, dist="norm", plot=axs[1, 1])
+        axs[1, 1].set_title("Q-Q Plot")
+
+        plt.tight_layout()
+        plt.show()
 
     def sample(self, k=None, with_replacement=True, weights=None):
         """
