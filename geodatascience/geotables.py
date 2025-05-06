@@ -770,7 +770,7 @@ class GeoTable(Table):
             GeoTable: A new GeoTable with sampled rows, preserving geospatial properties.
 
         Example:
-            >>> gt = GeoTable.from_csv('data.csv', lon_col='longitude', lat_col='latitude')
+            >>> gt = GeoTable.from_csv('NYC_PM.csv', lon_col='longitude', lat_col='latitude')
             >>> sampled = gt.sample(100)  # Sample 100 rows with replacement
         """
         # Perform sampling using the parent Table's sample method
@@ -801,7 +801,7 @@ class GeoTable(Table):
             GeoTable: A new GeoTable with sampled rows, preserving geospatial properties.
 
         Example:
-            >>> gt = GeoTable.from_csv('data.csv', lon_col='longitude', lat_col='latitude')
+            >>> gt = GeoTable.from_csv('NYC_PM.csv', lon_col='longitude', lat_col='latitude')
             >>> stratified = gt.stratified_sample('geohash', k=100)  # Sample 100 rows proportionally
             >>> stratified = gt.stratified_sample('geohash', sizes={'gh1': 50, 'gh2': 30})
         """
@@ -885,7 +885,7 @@ class GeoTable(Table):
             GeoTable: A GeoTable with one column ('statistic') containing the computed values.
 
         Example:
-            >>> gt = GeoTable.from_csv('data.csv', lon_col='longitude', lat_col='latitude')
+            >>> gt = GeoTable.from_csv('NYC_PM.csv', lon_col='longitude', lat_col='latitude')
             >>> gt.distance_to(ref_index=0, new_column='distance_to_ref')
             >>> dist = gt.empirical_distribution(
             ...     statistic=lambda t: np.mean(t.column('distance_to_ref')),
