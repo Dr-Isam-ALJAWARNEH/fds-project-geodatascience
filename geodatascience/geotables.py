@@ -785,6 +785,89 @@ class GeoTable(Table):
             geo.append_column(label, sampled_table.column(label))
 
         return geo
+    
+    
+    def stratified_sample(self, strata_column, k=None, sizes=None, with_replacement=True):
+        """
+        Perform stratified sampling based on a column.
+
+        Args:
+            strata_column (str): Column name to define strata (e.g., 'geohash', 'city').
+            k (int): Total number of rows to sample (proportional across strata). Ignored if sizes is provided.
+            sizes (dict): Dictionary mapping stratum values to sample sizes (e.g., {'gh1': 10, 'gh2': 20}).
+            with_replacement (bool): Whether to sample with replacement (default: True).
+
+        Returns:
+            GeoTable: A new GeoTable with sampled rows, preserving geospatial properties.
+
+        Example:
+            >>> gt = GeoTable.from_csv('data.csv', lon_col='longitude', lat_col='latitude')
+            >>> stratified = gt.stratified_sample('geohash', k=100)  # Sample 100 rows proportionally
+            >>> stratified = gt.stratified_sample('geohash', sizes={'gh1': 50, 'gh2': 30})
+        """
+        if strata_column not in self.labels:
+            raise ValueError(f"Strata column '{strata_column}' not found in GeoTable.")
+
+        # Group by strata_column to get counts and values
+        grouped = self.group(strata_column)
+        strata_values = grouped.column(strata_column)
+        strata_counts = grouped.column('count')
+        total_rows = self.num_rows
+
+        # Compute sample sizes
+        if sizes:
+            sample_sizes = sizes
+            # Validate sizes
+            for stratum, size in sample_sizes.items():
+                if stratum not in strata_values:
+                    raise ValueError(f"Stratum '{stratum}' not found in column '{strata_column}'.")
+                if not with_replacement:
+                    stratum_count = strata_counts[list(strata_values).index(stratum)]
+                    if size > stratum_count:
+                        raise ValueError(
+                            f"Sample size {size} for stratum '{stratum}' exceeds available rows "
+                            f"({stratum_count}) with with_replacement=False."
+                        )
+        else:
+            if k is None:
+                k = total_rows
+            proportions = strata_counts / total_rows
+            sample_sizes = {val: max(1, int(np.round(prop * k))) for val, prop in zip(strata_values, proportions)}
+
+        # Collect sampled rows as a list of dictionaries
+        sampled_rows = []
+        for stratum, size in sample_sizes.items():
+            if size > 0:
+                stratum_table = self.where(strata_column, stratum)
+                if stratum_table.num_rows == 0:
+                    continue
+                sampled = stratum_table.sample(k=size, with_replacement=with_replacement)
+                for i in range(sampled.num_rows):
+                    row_dict = {label: sampled.column(label)[i] for label in sampled.labels}
+                    sampled_rows.append(row_dict)
+
+        # If no rows were sampled, return an empty GeoTable
+        if not sampled_rows:
+            result = GeoTable()
+            result = self._copy_geo_state(result)
+            for label in self.labels:
+                result.append_column(label, [])
+            return result
+
+        # Create result GeoTable
+        result = GeoTable()
+        result = self._copy_geo_state(result)
+
+        # Convert sampled rows to columns
+        all_labels = set()
+        for row in sampled_rows:
+            all_labels.update(row.keys())
+
+        for label in all_labels:
+            column_data = [row.get(label, None) for row in sampled_rows]
+            result.append_column(label, column_data)
+
+        return result
 
 
 
