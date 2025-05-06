@@ -805,6 +805,550 @@ class GeoTable(Table):
         print(f"Manual Regression Line: {y_col} = {m:.4f} * {x_col} + {b:.4f}")
 
 
+    def sample(self, k=None, with_replacement=True, weights=None):
+        """
+        Draw a random sample of rows from the GeoTable.
+
+        Args:
+            k (int): Number of rows to sample. If None, sample the same number as the table's rows.
+            with_replacement (bool): Whether to sample with replacement (default: True).
+            weights (array-like): Probabilities for each row (default: None for equal probability).
+
+        Returns:
+            GeoTable: A new GeoTable with sampled rows, preserving geospatial properties.
+
+        Example:
+            >>> gt = GeoTable.from_csv('NYC_PM.csv', lon_col='longitude', lat_col='latitude')
+            >>> sampled = gt.sample(100)  # Sample 100 rows with replacement
+        """
+        # Perform sampling using the parent Table's sample method
+        sampled_table = super().sample(k, with_replacement=with_replacement, weights=weights)
+
+        # Create a new GeoTable and copy geospatial state
+        geo = GeoTable()
+        geo = self._copy_geo_state(geo)
+
+        # Copy all columns from sampled_table to geo
+        for label in sampled_table.labels:
+            geo.append_column(label, sampled_table.column(label))
+
+        return geo
+    
+
+    def stratified_sample(self, strata_column, k=None, sizes=None, with_replacement=True):
+        """
+        Perform stratified sampling based on a column.
+
+        Args:
+            strata_column (str): Column name to define strata (e.g., 'geohash', 'city').
+            k (int): Total number of rows to sample (proportional across strata). Ignored if sizes is provided.
+            sizes (dict): Dictionary mapping stratum values to sample sizes (e.g., {'gh1': 10, 'gh2': 20}).
+            with_replacement (bool): Whether to sample with replacement (default: True).
+
+        Returns:
+            GeoTable: A new GeoTable with sampled rows, preserving geospatial properties.
+
+        Example:
+            >>> gt = GeoTable.from_csv('NYC_PM.csv', lon_col='longitude', lat_col='latitude')
+            >>> stratified = gt.stratified_sample('geohash', k=100)  # Sample 100 rows proportionally
+            >>> stratified = gt.stratified_sample('geohash', sizes={'gh1': 50, 'gh2': 30})
+        """
+        if strata_column not in self.labels:
+            raise ValueError(f"Strata column '{strata_column}' not found in GeoTable.")
+
+        # Group by strata_column to get counts and values
+        grouped = self.group(strata_column)
+        strata_values = grouped.column(strata_column)
+        strata_counts = grouped.column('count')
+        total_rows = self.num_rows
+
+        # Compute sample sizes
+        if sizes:
+            sample_sizes = sizes
+            # Validate sizes
+            for stratum, size in sample_sizes.items():
+                if stratum not in strata_values:
+                    raise ValueError(f"Stratum '{stratum}' not found in column '{strata_column}'.")
+                if not with_replacement:
+                    stratum_count = strata_counts[list(strata_values).index(stratum)]
+                    if size > stratum_count:
+                        raise ValueError(
+                            f"Sample size {size} for stratum '{stratum}' exceeds available rows "
+                            f"({stratum_count}) with with_replacement=False."
+                        )
+        else:
+            if k is None:
+                k = total_rows
+            proportions = strata_counts / total_rows
+            sample_sizes = {val: max(1, int(np.round(prop * k))) for val, prop in zip(strata_values, proportions)}
+
+        # Collect sampled rows as a list of dictionaries
+        sampled_rows = []
+        for stratum, size in sample_sizes.items():
+            if size > 0:
+                stratum_table = self.where(strata_column, stratum)
+                if stratum_table.num_rows == 0:
+                    continue
+                sampled = stratum_table.sample(k=size, with_replacement=with_replacement)
+                for i in range(sampled.num_rows):
+                    row_dict = {label: sampled.column(label)[i] for label in sampled.labels}
+                    sampled_rows.append(row_dict)
+
+        # If no rows were sampled, return an empty GeoTable
+        if not sampled_rows:
+            result = GeoTable()
+            result = self._copy_geo_state(result)
+            for label in self.labels:
+                result.append_column(label, [])
+            return result
+
+        # Create result GeoTable
+        result = GeoTable()
+        result = self._copy_geo_state(result)
+
+        # Convert sampled rows to columns
+        all_labels = set()
+        for row in sampled_rows:
+            all_labels.update(row.keys())
+
+        for label in all_labels:
+            column_data = [row.get(label, None) for row in sampled_rows]
+            result.append_column(label, column_data)
+
+        return result
+    
+    def empirical_distribution(self, statistic, n_samples=1000, sample_size=None, with_replacement=True, column=None):
+        """
+        Generate an empirical distribution of a statistic by repeated sampling.
+
+        Args:
+            statistic (callable): Function that takes a GeoTable and returns a numeric value
+                                (e.g., lambda t: np.mean(t.column('distance_to_ref'))).
+            n_samples (int): Number of times to sample and compute the statistic (default: 1000).
+            sample_size (int): Number of rows to sample each time. If None, use table size.
+            with_replacement (bool): Whether to sample with replacement (default: True).
+            column (str): Optional column name to pass to statistic (for validation).
+
+        Returns:
+            GeoTable: A GeoTable with one column ('statistic') containing the computed values.
+
+        Example:
+            >>> gt = GeoTable.from_csv('NYC_PM.csv', lon_col='longitude', lat_col='latitude')
+            >>> gt.distance_to(ref_index=0, new_column='distance_to_ref')
+            >>> dist = gt.empirical_distribution(
+            ...     statistic=lambda t: np.mean(t.column('distance_to_ref')),
+            ...     n_samples=1000,
+            ...     sample_size=100
+            ... )
+            >>> dist.hist('statistic')
+        """
+        if column and column not in self.labels:
+            raise ValueError(f"Column '{column}' not found in GeoTable.")
+
+        if sample_size is None:
+            sample_size = self.num_rows
+
+        # Perform repeated sampling and compute statistic
+        stats = []
+        for _ in range(n_samples):
+            sample = self.sample(sample_size, with_replacement=with_replacement)
+            stat_value = statistic(sample)
+            stats.append(stat_value)
+
+        # Create a GeoTable to store results
+        result = GeoTable()
+        result.append_column('statistic', stats)
+
+        return result
+
+    def bootstrap_statistic(self, group_column, statistic, groups=None, column_label=None, num_samples=5000, confidence_level=95, plot=True):
+        if group_column not in self.labels:
+            raise ValueError(f"Group column '{group_column}' not found in GeoTable.")
+        if column_label and column_label not in self.labels:
+            raise ValueError(f"Column '{column_label}' not found in GeoTable.")
+
+        # Select groups if not provided
+        if groups is None:
+            if column_label is None:
+                raise ValueError("column_label must be provided if groups is None.")
+            # Group by group_column and compute mean of column_label
+            group_means = self.group(group_column, np.mean)
+            # Sort by mean of column_label and take top 3
+            top_groups = group_means.sort(f"{column_label} mean", descending=True).take(np.arange(3))
+            groups = top_groups.column(group_column)
+
+        # Initialize results
+        results = []
+
+        # Define percentile function for confidence intervals
+        def percentile(data, p):
+            return np.percentile(data, p)
+
+        # Perform bootstrapping for each group
+        for group in groups:
+            # Subset the table for the group
+            subset = self.where(group_column, group)
+            if subset.num_rows == 0:
+                print(f"Warning: No data for group '{group}'. Skipping.")
+                continue
+
+            # Bootstrap resampling
+            boot_stats = []
+            for _ in range(num_samples):
+                resample = subset.sample(k=subset.num_rows, with_replacement=True)
+                stat_value = statistic(resample)
+                boot_stats.append(stat_value)
+            boot_stats = np.array(boot_stats)
+
+            # Compute confidence intervals
+            lower_percentile = (100 - confidence_level) / 2
+            upper_percentile = 100 - lower_percentile
+            lower_bound = percentile(boot_stats, lower_percentile)
+            upper_bound = percentile(boot_stats, upper_percentile)
+
+            # Store results
+            results.append({
+                'group': group,
+                'lower_bound': lower_bound,
+                'upper_bound': upper_bound,
+                'bootstrap_means': boot_stats
+            })
+
+            # Plot histogram if requested
+            if plot:
+                plt.figure(figsize=(8, 5))
+                plt.hist(boot_stats, bins=30, edgecolor='black', alpha=0.7)
+                plt.axvline(x=lower_bound, color='yellow', linestyle='--', label='95% CI')
+                plt.axvline(x=upper_bound, color='yellow', linestyle='--')
+                plt.title(f'Bootstrap Distribution of Statistic\nGroup: {group}')
+                plt.xlabel('Statistic Value')
+                plt.ylabel('Frequency')
+                plt.legend()
+                plt.grid(True)
+                plt.show()
+                print(f"95% Confidence Interval for {group}: [{lower_bound:.2f}, {upper_bound:.2f}]")
+
+        # Create result GeoTable
+        result = GeoTable()
+        result = self._copy_geo_state(result)
+        result.append_column('group', [r['group'] for r in results])
+        result.append_column('lower_bound', [r['lower_bound'] for r in results])
+        result.append_column('upper_bound', [r['upper_bound'] for r in results])
+        result.append_column('bootstrap_means', [r['bootstrap_means'] for r in results])
+
+        return result
+    
+
+    def percentile(p, collection):
+        """
+        Returns the p-th percentile of a collection, where p is a number between 0 and 100,
+        and collection is the dataset from which the percentile is calculated.
+        
+        Args:
+            p (float): Percentile value between 0 and 100.
+            collection (array-like): Dataset to calculate the percentile from.
+        
+        Returns:
+            float: The p-th percentile value from the dataset.
+        """
+        return np.percentile(collection, p)
+
+    def percentile_50(collection):
+        """
+        Calculates the median (50th percentile) of the collection.
+        
+        Args:
+            collection (array-like): Dataset to calculate the median from.
+        
+        Returns:
+            float: The median (50th percentile) value from the dataset.
+        """
+        return percentile(50, collection)
+
+    def one_bootstrap_median(original_sample):
+        """
+        Generates one bootstrapped sample from the original sample and returns the median of the resampled data.
+        
+        Args:
+            original_sample (GeoTable): The original dataset to bootstrap from.
+        
+        Returns:
+            float: The median value of the resampled data.
+        """
+        sample = original_sample.sample(k=len(original_sample), with_replacement=True)
+        return np.median(sample.column('column_name'))  # Replace 'column_name' with the relevant column
+
+    def bootstrap_median(original_sample, num_repetitions):
+        """
+        Generates multiple bootstrapped medians.
+        It resamples the original sample num_repetitions times and calculates the median for each resample,
+        returning an array of bootstrapped medians.
+        
+        Args:
+            original_sample (GeoTable): The original dataset to bootstrap from.
+            num_repetitions (int): The number of bootstrapped samples to generate.
+        
+        Returns:
+            list: List of bootstrapped median values.
+        """
+        return [one_bootstrap_median(original_sample) for _ in range(num_repetitions)]
+
+    def one_bootstrap_mean(original_sample):
+        """
+        Generates one bootstrapped sample and returns the mean (average) of the resampled data.
+        
+        Args:
+            original_sample (GeoTable): The original dataset to bootstrap from.
+        
+        Returns:
+            float: The mean value of the resampled data.
+        """
+        sample = original_sample.sample(k=len(original_sample), with_replacement=True)
+        return np.mean(sample.column('column_name'))  # Replace 'column_name' with the relevant column
+
+    def bootstrap_mean(original_sample, num_repetitions):
+        """
+        Generates multiple bootstrapped means.
+        It resamples the original sample num_repetitions times and calculates the mean for each resample,
+        returning an array of bootstrapped means.
+        
+        Args:
+            original_sample (GeoTable): The original dataset to bootstrap from.
+            num_repetitions (int): The number of bootstrapped samples to generate.
+        
+        Returns:
+            list: List of bootstrapped mean values.
+        """
+        return [one_bootstrap_mean(original_sample) for _ in range(num_repetitions)]
+
+    def one_bootstrap_proportion(original_sample):
+        """
+        Generates one bootstrapped sample and calculates the proportion of "True" values for the Maternal Smoker column,
+        returning that proportion for the resampled data.
+        
+        Args:
+            original_sample (GeoTable): The original dataset to bootstrap from.
+        
+        Returns:
+            float: The proportion of "True" values for the Maternal Smoker column in the resampled data.
+        """
+        sample = original_sample.sample(k=len(original_sample), with_replacement=True)
+        return np.mean(sample.column('Maternal Smoker') == 'True')  # Assuming 'Maternal Smoker' is the relevant column
+
+    def make_array(*args):
+        """
+        Creates arrays from the provided arguments.
+        
+        Args:
+            *args: Values to be converted into an array.
+        
+        Returns:
+            np.ndarray: The resulting array created from the arguments.
+        """
+        return np.array(args)
+
+    def sample(self, k=None, with_replacement=True, weights=None):
+        """
+        Draw a random sample of rows from the GeoTable.
+        
+        Args:
+            k (int): Number of rows to sample. If None, sample the same number as the table's rows.
+            with_replacement (bool): Whether to sample with replacement (default: True).
+            weights (array-like): Probabilities for each row (default: None for equal probability).
+        
+        Returns:
+            GeoTable: A new GeoTable with sampled rows, preserving geospatial properties.
+        """
+        sampled_table = super().sample(k, with_replacement=with_replacement, weights=weights)
+        geo = GeoTable()
+        geo = self._copy_geo_state(geo)
+
+        for label in sampled_table.labels:
+            geo.append_column(label, sampled_table.column(label))
+
+        return geo
+
+    def stratified_sample(self, strata_column, k=None, sizes=None, with_replacement=True):
+        """
+        Perform stratified sampling based on a column.
+        
+        Args:
+            strata_column (str): Column name to define strata (e.g., 'geohash', 'city').
+            k (int): Total number of rows to sample (proportional across strata). Ignored if sizes is provided.
+            sizes (dict): Dictionary mapping stratum values to sample sizes (e.g., {'gh1': 10, 'gh2': 20}).
+            with_replacement (bool): Whether to sample with replacement (default: True).
+        
+        Returns:
+            GeoTable: A new GeoTable with sampled rows, preserving geospatial properties.
+        """
+        if strata_column not in self.labels:
+            raise ValueError(f"Strata column '{strata_column}' not found in GeoTable.")
+
+        grouped = self.group(strata_column)
+        strata_values = grouped.column(strata_column)
+        strata_counts = grouped.column('count')
+        total_rows = self.num_rows
+
+        if sizes:
+            sample_sizes = sizes
+            for stratum, size in sample_sizes.items():
+                if stratum not in strata_values:
+                    raise ValueError(f"Stratum '{stratum}' not found in column '{strata_column}'.")
+                if not with_replacement:
+                    stratum_count = strata_counts[list(strata_values).index(stratum)]
+                    if size > stratum_count:
+                        raise ValueError(
+                            f"Sample size {size} for stratum '{stratum}' exceeds available rows."
+                        )
+        else:
+            if k is None:
+                k = total_rows
+            proportions = strata_counts / total_rows
+            sample_sizes = {val: max(1, int(np.round(prop * k))) for val, prop in zip(strata_values, proportions)}
+
+        sampled_rows = []
+        for stratum, size in sample_sizes.items():
+            if size > 0:
+                stratum_table = self.where(strata_column, stratum)
+                sampled = stratum_table.sample(k=size, with_replacement=with_replacement)
+                for i in range(sampled.num_rows):
+                    row_dict = {label: sampled.column(label)[i] for label in sampled.labels}
+                    sampled_rows.append(row_dict)
+
+        if not sampled_rows:
+            result = GeoTable()
+            result = self._copy_geo_state(result)
+            for label in self.labels:
+                result.append_column(label, [])
+            return result
+
+        result = GeoTable()
+        result = self._copy_geo_state(result)
+
+        all_labels = set()
+        for row in sampled_rows:
+            all_labels.update(row.keys())
+
+        for label in all_labels:
+            column_data = [row.get(label, None) for row in sampled_rows]
+            result.append_column(label, column_data)
+
+        return result
+
+    def empirical_distribution(self, statistic, n_samples=1000, sample_size=None, with_replacement=True, column=None):
+        """
+        Generate an empirical distribution of a statistic by repeated sampling.
+        
+        Args:
+            statistic (callable): Function that takes a GeoTable and returns a numeric value (e.g., lambda t: np.mean(t.column('distance_to_ref'))).
+            n_samples (int): Number of times to sample and compute the statistic (default: 1000).
+            sample_size (int): Number of rows to sample each time. If None, use table size.
+            with_replacement (bool): Whether to sample with replacement (default: True).
+            column (str): Optional column name to pass to statistic (for validation).
+        
+        Returns:
+            GeoTable: A GeoTable with one column ('statistic') containing the computed values.
+        """
+        if column and column not in self.labels:
+            raise ValueError(f"Column '{column}' not found in GeoTable.")
+
+        if sample_size is None:
+            sample_size = self.num_rows
+
+        stats = []
+        for _ in range(n_samples):
+            sample = self.sample(sample_size, with_replacement=with_replacement)
+            stat_value = statistic(sample)
+            stats.append(stat_value)
+
+        result = GeoTable()
+        result.append_column('statistic', stats)
+
+        return result
+
+    def bootstrap_statistic(self, group_column, statistic, groups=None, column_label=None, num_samples=5000, confidence_level=95, plot=True):
+        """
+        Performs bootstrapping and calculates a statistic with confidence intervals for groups in the GeoTable.
+        
+        Args:
+            group_column (str): The column to group by (e.g., 'city', 'geohash').
+            statistic (callable): Function to calculate the statistic on each bootstrap sample (e.g., np.mean).
+            groups (list): List of group names to calculate the statistic for (optional).
+            column_label (str): The column to calculate the statistic on (optional).
+            num_samples (int): Number of bootstrap samples (default: 5000).
+            confidence_level (int): Confidence level for the confidence intervals (default: 95).
+            plot (bool): Whether to plot the histogram of bootstrap samples (default: True).
+        
+        Returns:
+            GeoTable: A new GeoTable containing the bootstrap statistics and confidence intervals for each group.
+        """
+        if group_column not in self.labels:
+            raise ValueError(f"Group column '{group_column}' not found in GeoTable.")
+        if column_label and column_label not in self.labels:
+            raise ValueError(f"Column '{column_label}' not found in GeoTable.")
+
+        if groups is None:
+            if column_label is None:
+                raise ValueError("column_label must be provided if groups is None.")
+            group_means = self.group(group_column, np.mean)
+            top_groups = group_means.sort(f"{column_label} mean", descending=True).take(np.arange(3))
+            groups = top_groups.column(group_column)
+
+        results = []  # Initialize results
+
+        def percentile(data, p):
+            return np.percentile(data, p)
+
+        for group in groups:
+            subset = self.where(group_column, group)
+            if subset.num_rows == 0:
+                print(f"Warning: No data for group '{group}'. Skipping.")
+                continue
+
+            boot_stats = []
+            for _ in range(num_samples):
+                resample = subset.sample(k=subset.num_rows, with_replacement=True)
+                stat_value = statistic(resample)
+                boot_stats.append(stat_value)
+            boot_stats = np.array(boot_stats)
+
+            lower_percentile = (100 - confidence_level) / 2
+            upper_percentile = 100 - lower_percentile
+            lower_bound = percentile(boot_stats, lower_percentile)
+            upper_bound = percentile(boot_stats, upper_percentile)
+
+            results.append({
+                'group': group,
+                'lower_bound': lower_bound,
+                'upper_bound': upper_bound,
+                'bootstrap_means': boot_stats
+            })
+
+            if plot:
+                plt.figure(figsize=(8, 5))
+                plt.hist(boot_stats, bins=30, edgecolor='black', alpha=0.7)
+                plt.axvline(x=lower_bound, color='yellow', linestyle='--', label='95% CI')
+                plt.axvline(x=upper_bound, color='yellow', linestyle='--')
+                plt.title(f'Bootstrap Distribution of Statistic\nGroup: {group}')
+                plt.xlabel('Statistic Value')
+                plt.ylabel('Frequency')
+                plt.legend()
+                plt.grid(True)
+                plt.show()
+                print(f"95% Confidence Interval for {group}: [{lower_bound:.2f}, {upper_bound:.2f}]")
+
+        # Create result GeoTable
+        result = GeoTable()
+        result = self._copy_geo_state(result)
+        result.append_column('group', [r['group'] for r in results])
+        result.append_column('lower_bound', [r['lower_bound'] for r in results])
+        result.append_column('upper_bound', [r['upper_bound'] for r in results])
+        result.append_column('bootstrap_means', [r['bootstrap_means'] for r in results])
+
+        return result
+
+
+
 
 
     
