@@ -756,6 +756,54 @@ class GeoTable(Table):
         intercept = model.intercept_[0]
         print(f"Regression Line: {y_col} = {slope:.4f} * {x_col} + {intercept:.4f}")
 
+    def plot_manual_least_squares_regression(self, x_col, y_col, label_points=False):
+        """
+        Manually computes and plots the least squares regression line (no sklearn).
+
+        Args:
+            x_col (str): Feature name on x-axis.
+            y_col (str): Feature name on y-axis.
+            label_points (bool): Optionally annotate each point.
+        """
+        import matplotlib.pyplot as plt
+        import numpy as np
+
+        df = self.to_df()
+
+        if x_col not in df.columns or y_col not in df.columns:
+            raise ValueError(f"Columns '{x_col}' and/or '{y_col}' not found.")
+
+        x = np.array(df[x_col])
+        y = np.array(df[y_col])
+
+        # Manual least squares
+        x_mean = np.mean(x)
+        y_mean = np.mean(y)
+
+        m = np.sum((x - x_mean) * (y - y_mean)) / np.sum((x - x_mean)**2)
+        b = y_mean - m * x_mean
+
+        y_pred = m * x + b
+
+        # Plot
+        plt.figure(figsize=(8, 6))
+        plt.scatter(x, y, color='skyblue', edgecolor='black', label='Data')
+        plt.plot(x, y_pred, color='blue', label='Least Squares Line')
+
+        if label_points:
+            for i, (xi, yi) in enumerate(zip(x, y)):
+                plt.text(xi, yi, str(i), fontsize=8)
+
+        plt.xlabel(x_col)
+        plt.ylabel(y_col)
+        plt.title(f"Manual Least Squares: {y_col} vs {x_col}")
+        plt.legend()
+        plt.grid(True)
+        plt.tight_layout()
+        plt.show()
+
+        print(f"Manual Regression Line: {y_col} = {m:.4f} * {x_col} + {b:.4f}")
+
 
 
 
