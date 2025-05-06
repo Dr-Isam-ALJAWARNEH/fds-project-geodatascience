@@ -447,6 +447,9 @@ class GeoTable(Table):
         
         # Case 3: Selecting non-geometry columns
         else:
+            if len(columns) == 1 and isinstance(columns[0], (tuple, list)):
+                columns = columns[0]
+
             return Table().with_columns(*[(label, self.column(label)) for label in columns])
 
 
