@@ -1289,3 +1289,130 @@ class GeoTable(Table):
             label_weights[label] += weight
 
         return max(label_weights.items(), key=lambda x: x[1])[0]
+    
+
+
+    def geo_temporal_knn(
+        self,
+        point,
+        observation_time,
+        label_column='pm10_class',
+        k=5,
+        temporal_decay=timedelta(hours=24),
+        spatial_weight=0.7,
+        temporal_weight=0.3
+    ):
+        """
+        Classifies geographic points using both spatial and temporal proximity.
+        
+        A weighted k-nearest neighbors approach that considers:
+        - Geographic distance (spatial component)
+        - Time difference (temporal component)
+        to predict the most likely class label.
+
+        Parameters:
+        -----------
+        point : shapely.geometry.Point or tuple
+            Location to classify - either Shapely Point or (longitude, latitude) tuple
+        observation_time : datetime-like or str
+            Reference time for temporal analysis (will be converted to datetime)
+        label_column : str, optional
+            Name of column containing class labels (default 'pm10_class')
+        k : int, optional
+            Number of nearest neighbors to consider (default 5)
+        temporal_decay : timedelta, optional
+            Maximum time difference to consider (default 24 hours)
+        spatial_weight : float, optional
+            Importance of spatial proximity (0-1, default 0.7)
+        temporal_weight : float, optional
+            Importance of temporal proximity (0-1, default 0.3)
+
+        Returns:
+        -------
+        str
+            Predicted class label based on spatio-temporal similarity
+
+        Algorithm:
+        ---------
+        1. For each reference point:
+           - Calculates spatial score (1/distance)
+           - Calculates temporal score (1/time_difference)
+           - Combines scores using weighted sum
+        2. Selects k points with highest combined scores
+        3. Returns most frequent label among top k
+
+        Notes:
+        ------
+        - Handles both datetime strings and Unix timestamps (in seconds)
+        - Spatial distances capped at 100 degrees (~11,000 km)
+        - Temporal differences capped by temporal_decay
+        - Weights must sum to 1.0 (spatial_weight + temporal_weight = 1)
+        - Uses inverse distance weighting (1/x) for both space and time
+
+        Example:
+        -------
+        >>> model.geo_temporal_knn(
+                point=(-74.006, 40.7128),  # NYC
+                observation_time="2023-09-20 12:00:00",
+                label_column='air_quality',
+                k=3,
+                temporal_decay=timedelta(hours=12)
+            )
+        'Moderate'
+
+        Raises:
+        -------
+        ValueError:
+            - If weights don't sum to 1.0
+            - If required columns are missing
+            - If point format is invalid
+        """
+        from shapely.geometry import Point
+        import pandas as pd
+        from datetime import timedelta
+
+        # --- Input Validation ---
+        if spatial_weight + temporal_weight != 1.0:
+            raise ValueError("Weights must sum to 1.0")
+
+        # Convert input point
+        if isinstance(point, (tuple, list)):
+            point = Point(point[0], point[1])  # (lon, lat)
+        observation_time = pd.to_datetime(observation_time)
+
+        # --- Column Checks ---
+        required_columns = {'geometry', 'time', label_column}
+        if not required_columns.issubset(set(self.labels)):
+            raise ValueError(f"Missing columns. Required: {required_columns}")
+
+        # --- Scoring ---
+        scores = []
+        for row in self.rows:
+            row_point = row.geometry
+            row_time = row.time
+
+            # Convert Unix timestamp if needed
+            if isinstance(row_time, (int, float)):
+                row_time = pd.to_datetime(row_time, unit='s')  # Unix timestamp in seconds
+            else:
+                row_time = pd.to_datetime(row_time)
+
+            # Spatial component
+            spatial_dist = min(point.distance(row_point), 100.0)  # Cap at 100 degrees
+            spatial_score = 1 / (spatial_dist + 1e-5)
+
+            # Temporal component
+            time_diff = abs((observation_time - row_time).total_seconds() / 3600)  # hours
+            time_diff = min(time_diff, temporal_decay.total_seconds() / 3600)  # Apply decay
+            temporal_score = 1 / (time_diff + 1e-5)
+
+            # Combined score
+            combined_score = (spatial_weight * spatial_score) + (temporal_weight * temporal_score)
+            scores.append((combined_score, getattr(row, label_column)))
+
+        # --- Get Top-K Labels ---
+        top_k_labels = [label for (_, label) in sorted(scores, reverse=True)[:k]]
+
+        # Inside geo_temporal_knn(), before the return:
+        return max(set(top_k_labels), key=top_k_labels.count)
+
