@@ -1167,3 +1167,125 @@ class GeoTable(Table):
             label_weights[label] += 1 / (dist + epsilon)
 
         return max(label_weights.items(), key=lambda x: x[1])[0]
+
+
+
+
+    def universal_geo_classifier(
+        self,
+        point,  # Shapely Point or (lon, lat) tuple
+        label_column='pm10_class',
+        k=5,
+        distance_metric='haversine',
+        weight_strategy='inverse_distance',
+        bandwidth=0.1,
+        epsilon=1e-5
+    ):
+        """
+        A universal geospatial classifier that predicts labels using weighted k-nearest neighbors.
+        
+        Combines spatial proximity with flexible weighting strategies to classify points based
+        on their geographic neighbors. Supports both spherical (Haversine) and planar (Euclidean)
+        distance metrics.
+
+        Parameters:
+        -----------
+        point : shapely.geometry.Point or tuple
+            Location to classify - either a Shapely Point or (longitude, latitude) tuple
+        label_column : str, optional
+            Name of column containing class labels (default 'pm10_class')
+        k : int, optional
+            Number of nearest neighbors to consider (default 5)
+        distance_metric : str, optional
+            Distance calculation method: 'haversine' (spherical) or 'euclidean' (planar)
+            (default 'haversine')
+        weight_strategy : str, optional
+            Weighting method for neighbors:
+            - 'inverse_distance': weights = 1/(distance + epsilon)
+            - 'gaussian': weights using Gaussian kernel exp(-0.5*(dist/bandwidth)^2)
+            (default 'inverse_distance')
+        bandwidth : float, optional
+            Spread parameter for Gaussian weighting (default 0.1)
+        epsilon : float, optional
+            Small constant to prevent division by zero (default 1e-5)
+
+        Returns:
+        -------
+        str or numeric
+            Predicted class label based on weighted neighbor votes
+
+        Algorithm:
+        ---------
+        1. Calculates distances between target point and all dataset points
+        2. Selects k nearest neighbors
+        3. Applies chosen weighting strategy to neighbor votes
+        4. Returns label with highest total weight
+
+        Notes:
+        ------
+        - For geographic data, 'haversine' is more accurate but slower than 'euclidean'
+        - 'inverse_distance' gives more weight to closer points
+        - 'gaussian' creates smooth distance decay with bandwidth control
+        - Requires 'geometry' column with Shapely Points in the dataset
+
+        Example:
+        -------
+        >>> model.universal_geo_classifier(
+                point=(-74.006, 40.7128),  # NYC coordinates
+                label_column='neighborhood',
+                k=3,
+                distance_metric='haversine'
+            )
+        'Financial District'
+
+        Raises:
+        -------
+        ValueError:
+            - If input point is neither Shapely Point nor (lon,lat) tuple
+            - If required columns ('geometry' or label_column) are missing
+            - If invalid distance_metric or weight_strategy is specified
+        """
+        from shapely.geometry import Point
+        from collections import defaultdict
+        from math import exp
+
+        # Convert input to Shapely Point
+        if isinstance(point, (tuple, list)):
+            point = Point(point[0], point[1])  # (lon, lat)
+        elif not isinstance(point, Point):
+            raise ValueError("Input must be Shapely Point or (lon,lat) tuple")
+
+        # --- Key Fix: Verify columns exist WITHOUT _has_column ---
+        if 'geometry' not in self.labels or label_column not in self.labels:
+            raise ValueError(f"Missing 'geometry' or '{label_column}' column")
+
+        distances = []
+        for row in self.rows:
+            row_point = row.geometry  # Access via attribute (not dict)
+            label = getattr(row, label_column)  # Access via attribute
+
+            if distance_metric == 'haversine':
+                dist = self._haversine_distance(
+                    point.y, point.x, 
+                    row_point.y, row_point.x
+                )
+            elif distance_metric == 'euclidean':
+                dist = point.distance(row_point)
+            else:
+                raise ValueError(f"Unknown metric: {distance_metric}")
+
+            distances.append((dist, label))
+
+        # Weighting and prediction
+        distances.sort(key=lambda x: x[0])
+        nearest = distances[:k]
+        
+        label_weights = defaultdict(float)
+        for dist, label in nearest:
+            if weight_strategy == 'inverse_distance':
+                weight = 1 / (dist + epsilon)
+            elif weight_strategy == 'gaussian':
+                weight = exp(-0.5 * (dist / bandwidth)**2)
+            label_weights[label] += weight
+
+        return max(label_weights.items(), key=lambda x: x[1])[0]
