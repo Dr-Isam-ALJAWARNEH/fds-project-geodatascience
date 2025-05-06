@@ -786,7 +786,7 @@ class GeoTable(Table):
 
         return geo
     
-    
+
     def stratified_sample(self, strata_column, k=None, sizes=None, with_replacement=True):
         """
         Perform stratified sampling based on a column.
@@ -868,6 +868,52 @@ class GeoTable(Table):
             result.append_column(label, column_data)
 
         return result
+    
+    def empirical_distribution(self, statistic, n_samples=1000, sample_size=None, with_replacement=True, column=None):
+        """
+        Generate an empirical distribution of a statistic by repeated sampling.
+
+        Args:
+            statistic (callable): Function that takes a GeoTable and returns a numeric value
+                                (e.g., lambda t: np.mean(t.column('distance_to_ref'))).
+            n_samples (int): Number of times to sample and compute the statistic (default: 1000).
+            sample_size (int): Number of rows to sample each time. If None, use table size.
+            with_replacement (bool): Whether to sample with replacement (default: True).
+            column (str): Optional column name to pass to statistic (for validation).
+
+        Returns:
+            GeoTable: A GeoTable with one column ('statistic') containing the computed values.
+
+        Example:
+            >>> gt = GeoTable.from_csv('data.csv', lon_col='longitude', lat_col='latitude')
+            >>> gt.distance_to(ref_index=0, new_column='distance_to_ref')
+            >>> dist = gt.empirical_distribution(
+            ...     statistic=lambda t: np.mean(t.column('distance_to_ref')),
+            ...     n_samples=1000,
+            ...     sample_size=100
+            ... )
+            >>> dist.hist('statistic')
+        """
+        if column and column not in self.labels:
+            raise ValueError(f"Column '{column}' not found in GeoTable.")
+
+        if sample_size is None:
+            sample_size = self.num_rows
+
+        # Perform repeated sampling and compute statistic
+        stats = []
+        for _ in range(n_samples):
+            sample = self.sample(sample_size, with_replacement=with_replacement)
+            stat_value = statistic(sample)
+            stats.append(stat_value)
+
+        # Create a GeoTable to store results
+        result = GeoTable()
+        result.append_column('statistic', stats)
+
+        return result
+    
+
 
 
 
