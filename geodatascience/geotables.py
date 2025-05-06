@@ -353,7 +353,7 @@ class GeoTable(Table):
         for label in new_table.labels:
             geo.append_column(label, new_table.column(label))
 
-        if self._geometry in args:
+        if self._geometry in args[::2]:
             return geo
 
         lat_label, lon_label = None, None
