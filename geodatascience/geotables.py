@@ -708,6 +708,54 @@ class GeoTable(Table):
         plt.grid(True)
         plt.tight_layout()
         plt.show()
+    def plot_spatial_regression(self, x_col, y_col, label_points=False):
+        """
+        Plots a scatter plot and regression line between two numeric columns.
+
+        Args:
+            x_col (str): Feature name on x-axis.
+            y_col (str): Feature name on y-axis.
+            label_points (bool): Optionally show region index as label.
+        """
+        import matplotlib.pyplot as plt
+        from sklearn.linear_model import LinearRegression
+        import numpy as np
+
+        df = self.to_df().copy()
+
+        if x_col not in df.columns or y_col not in df.columns:
+            raise ValueError(f"Columns '{x_col}' and/or '{y_col}' not found in table.")
+
+        x = df[x_col].values.reshape(-1, 1)
+        y = df[y_col].values.reshape(-1, 1)
+
+        # Fit regression model
+        model = LinearRegression()
+        model.fit(x, y)
+        y_pred = model.predict(x)
+
+        # Plot
+        plt.figure(figsize=(8, 6))
+        plt.scatter(x, y, color='skyblue', edgecolor='black', label='Data')
+        plt.plot(x, y_pred, color='green', linewidth=2, label='Regression Line')
+
+        if label_points:
+            for i, (xi, yi) in enumerate(zip(x.flatten(), y.flatten())):
+                plt.text(xi, yi, str(i), fontsize=8)
+
+        plt.xlabel(x_col)
+        plt.ylabel(y_col)
+        plt.title(f"Regression: {y_col} vs {x_col}")
+        plt.legend()
+        plt.grid(True)
+        plt.tight_layout()
+        plt.show()
+
+        # Optional: print model coefficients
+        slope = model.coef_[0][0]
+        intercept = model.intercept_[0]
+        print(f"Regression Line: {y_col} = {slope:.4f} * {x_col} + {intercept:.4f}")
+
 
 
 
