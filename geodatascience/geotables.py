@@ -1065,3 +1065,105 @@ class GeoTable(Table):
         return R * c
 
     
+
+
+    def geo_knn_classify(
+        self,
+        k,
+        new_point,
+        label_column,
+        lat_col='latitude',
+        lon_col='longitude',
+        epsilon=1e-5,
+        use_geometry=True
+    ):
+        """
+        Performs weighted k-nearest neighbors classification using geospatial distances.
+        
+        Uses inverse distance weighting to predict the most probable class label for a new
+        geographic point based on its k nearest neighbors in the dataset.
+
+        Parameters:
+        -----------
+        k : int
+            Number of nearest neighbors to consider for classification
+        new_point : tuple or shapely.geometry.Point
+            Target location for prediction - either (latitude, longitude) tuple or Shapely Point
+        label_column : str
+            Name of column containing class labels to predict
+        lat_col : str, optional
+            Name of latitude column (default 'latitude'), used when use_geometry=False
+        lon_col : str, optional
+            Name of longitude column (default 'longitude'), used when use_geometry=False
+        epsilon : float, optional
+            Small constant to prevent division by zero in weights (default 1e-5)
+        use_geometry : bool, optional
+            If True, uses 'geometry' column with Shapely Points (default True)
+            If False, uses separate lat/lon columns
+
+        Returns:
+        -------
+        str or int
+            Predicted class label based on weighted voting of nearest neighbors
+
+        Algorithm:
+        ---------
+        1. Calculates Haversine distances between new_point and all dataset points
+        2. Selects k nearest neighbors
+        3. Assigns weights to each neighbor's vote as 1/(distance + epsilon)
+        4. Returns the label with highest total weight
+
+        Notes:
+        ------
+        - For geographic data, this is more accurate than standard KNN using Euclidean distance
+        - Weights give more influence to closer points
+        - Set epsilon carefully - too large may dilute distance weighting effect
+        - Works with either Shapely Points or separate lat/lon columns
+
+        Example:
+        -------
+        >>> model.geo_knn_classify(
+                k=5,
+                new_point=(40.7128, -74.0060),  # NYC coordinates
+                label_column='neighborhood',
+                use_geometry=False
+            )
+        'Financial District'
+        """
+        from collections import defaultdict
+        from math import radians, sin, cos, sqrt, atan2
+
+        distances = []
+
+        # Get new point's coordinates
+        if use_geometry:
+            new_lat = new_point.y
+            new_lon = new_point.x
+            geometries = self.column('geometry')
+        else:
+            new_lat, new_lon = new_point
+            latitudes = self.column(lat_col)
+            longitudes = self.column(lon_col)
+
+        labels = self.column(label_column)
+
+        for i in range(self.num_rows):
+            if use_geometry:
+                point = geometries[i]
+                lat, lon = point.y, point.x
+            else:
+                lat = latitudes[i]
+                lon = longitudes[i]
+
+            label = labels[i]
+            dist = self._haversine_distance(new_lat, new_lon, lat, lon)
+            distances.append((dist, label))
+
+        distances.sort(key=lambda x: x[0])
+        nearest = distances[:k]
+
+        label_weights = defaultdict(float)
+        for dist, label in nearest:
+            label_weights[label] += 1 / (dist + epsilon)
+
+        return max(label_weights.items(), key=lambda x: x[1])[0]
