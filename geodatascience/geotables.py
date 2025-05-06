@@ -757,6 +757,36 @@ class GeoTable(Table):
         print(f"Regression Line: {y_col} = {slope:.4f} * {x_col} + {intercept:.4f}")
 
 
+    def sample(self, k=None, with_replacement=True, weights=None):
+        """
+        Draw a random sample of rows from the GeoTable.
+
+        Args:
+            k (int): Number of rows to sample. If None, sample the same number as the table's rows.
+            with_replacement (bool): Whether to sample with replacement (default: True).
+            weights (array-like): Probabilities for each row (default: None for equal probability).
+
+        Returns:
+            GeoTable: A new GeoTable with sampled rows, preserving geospatial properties.
+
+        Example:
+            >>> gt = GeoTable.from_csv('data.csv', lon_col='longitude', lat_col='latitude')
+            >>> sampled = gt.sample(100)  # Sample 100 rows with replacement
+        """
+        # Perform sampling using the parent Table's sample method
+        sampled_table = super().sample(k, with_replacement=with_replacement, weights=weights)
+
+        # Create a new GeoTable and copy geospatial state
+        geo = GeoTable()
+        geo = self._copy_geo_state(geo)
+
+        # Copy all columns from sampled_table to geo
+        for label in sampled_table.labels:
+            geo.append_column(label, sampled_table.column(label))
+
+        return geo
+
+
 
 
     
