@@ -29,7 +29,6 @@ We will extend the following abstraction:
 
 ***Team members***:
 - [Dr. Isam Al Jawarneh](https://isamaljawarneh.github.io/) (```supervisor```)
-- [Mahmoud Madi](https://github.com/MahmoudMadi77) (```member```)
 - [Amal Ali Ali] (```member```)
 - [Joude Azzam] (```member```)
 - [Sara Alketbi] (```member```)
