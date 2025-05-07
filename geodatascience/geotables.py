@@ -569,36 +569,51 @@ class GeoTable(Table):
 
 
 
-    def plot_sjoined_interactive(self, neighbor_col='geohash', zoom=12):
-        """
-        Plots GeoTable points, grouping by the same 'neighbor' in the same color.
+    def plot_joined_interactive(self, color_by='region'):
+      """
+      Plot the GeoTable as an interactive folium map.
+      Args:
+          color_by (str): Column to color the markers by.
+      """
+      try:
+          import folium
+          from folium.plugins import MarkerCluster
+          import branca.colormap as cm
+      except ImportError:
+          raise ImportError("You need to install folium to use interactive maps.")
 
-        Args:
-            neighbor_col (str): Column name indicating neighborhood/grouping (e.g., 'geohash' or cluster label).
-            zoom (int): Zoom level for the base map.
-        """
-        if self._geometry not in self.labels:
-            raise ValueError(f"Geometry column '{self._geometry}' not found.")
+      gdf = self.to_geodataframe().set_crs("EPSG:4326")
 
-        if neighbor_col not in self.labels:
-            raise ValueError(f"Neighbor column '{neighbor_col}' not found.")
+      if color_by not in gdf.columns:
+          print(f"'{color_by}' column not found. Using uniform color.")
+          gdf[color_by] = 'default'
 
-        # Convert to GeoDataFrame
-        gdf = self.to_geodataframe().set_crs("EPSG:4326")
-        gdf = gdf.to_crs("EPSG:3857")
+      # Center of map
+      center = [gdf.geometry.y.mean(), gdf.geometry.x.mean()]
+      m = folium.Map(location=center, zoom_start=12)
 
-        # Plot
-        fig, ax = plt.subplots(figsize=(10, 8))
-        gdf.plot(ax=ax, column=neighbor_col, cmap='tab20', legend=True,
-                markersize=40, alpha=0.8, edgecolor='black')
+      # Create color scale
+      unique_vals = gdf[color_by].dropna().unique()
+      colors = cm.linear.Set1_09.scale(0, len(unique_vals)).to_step(len(unique_vals))
+      color_map = dict(zip(unique_vals, colors.colors))
 
-        # Add basemap
-        ctx.add_basemap(ax, source=ctx.providers.CartoDB.Positron, zoom=zoom)
+      cluster = MarkerCluster().add_to(m)
 
-        ax.set_axis_off()
-        plt.tight_layout()
-        plt.title(f"Points colored by '{neighbor_col}'")
-        plt.show()
+      for _, row in gdf.iterrows():
+          coord = [row.geometry.y, row.geometry.x]
+          val = row[color_by]
+          color = color_map.get(val, 'gray')
+          folium.CircleMarker(
+              location=coord,
+              radius=6,
+              color=color,
+              fill=True,
+              fill_color=color,
+              fill_opacity=0.7,
+              popup=str(val),
+          ).add_to(cluster)
+
+      return m
 
 
 
