@@ -1090,6 +1090,58 @@ class GeoTable(Table):
 
         return np.array(bootstrapped_statistics)
 
+    def hypothesis_test(self, column_label, boot_stats, test_value, confidence_level=95, plot=True):
+        """
+        Perform hypothesis test to check if a value lies within the confidence interval.
+        """
+        if column_label not in self.labels:
+            raise ValueError(f"Column '{column_label}' not found in GeoTable.")
+
+        # Compute the confidence interval correctly
+        lower_bound, upper_bound = self.percentile(boot_stats, confidence_level)
+
+        # Perform hypothesis testing
+        if test_value >= lower_bound and test_value <= upper_bound:
+            hypothesis_result = (
+                f"Fail to reject the null hypothesis: {test_value} is within the {confidence_level}% CI. "
+                f"No significant evidence that the statistic differs from {test_value}."
+            )
+        else:
+            hypothesis_result = (
+                f"Reject the null hypothesis: {test_value} is not within the {confidence_level}% CI. "
+                f"Significant evidence that the statistic differs from {test_value}."
+            )
+
+        # If plotting is required, create the histogram of bootstrap statistics
+        if plot:
+            plt.figure(figsize=(8, 5))
+            plt.hist(boot_stats, bins=30, edgecolor='black', alpha=0.7)
+            plt.axvline(x=lower_bound, color='yellow', linestyle='--', label=f'{confidence_level}% CI')
+            plt.axvline(x=upper_bound, color='yellow', linestyle='--')
+            plt.axvline(x=test_value, color='red', linestyle='-', label=f'Test Value ({test_value})')
+            plt.title(f'Bootstrap Distribution\nColumn: {column_label}')
+            plt.xlabel('Statistic Value')
+            plt.ylabel('Frequency')
+            plt.legend()
+            plt.grid(True)
+            plt.subplots_adjust(left=0.1, right=0.9, top=0.9, bottom=0.1)
+            plt.show()
+
+            print(f"{confidence_level}% Confidence Interval for {column_label}: [{lower_bound:.2f}, {upper_bound:.2f}]")
+            print(hypothesis_result)
+
+        # Store the result as a GeoTable for reference
+        result = GeoTable()
+        result = self._copy_geo_state(result)
+        result.append_column('test_value', [test_value])
+        result.append_column('lower_bound', [lower_bound])
+        result.append_column('upper_bound', [upper_bound])
+        result.append_column('hypothesis_result', [hypothesis_result])
+        result.append_column('bootstrap_values', [boot_stats])
+
+        return result
+
+
     @staticmethod
     def _haversine_distance(lat1, lon1, lat2, lon2):
         """
