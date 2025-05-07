@@ -27,14 +27,10 @@ have a look at some of the features in the `datascience` available [here](https:
 We will extend the following abstraction:
 - [datascience](https://github.com/data-8/datascience).
 
-this is a test
 ***Team members***:
 - [Dr. Isam Al Jawarneh](https://isamaljawarneh.github.io/) (```supervisor```)
 - [Mahmoud Madi](https://github.com/MahmoudMadi77) (```member```)
-- [Abdullah Abdulkarim] (```member```)
-- [Joude Azzam]() (```member```)
-- [Said]() (```member```) 
-- [Mohammad]() (```member```) 
-- [Omar]() (```member```)
-
-
+- [Amal Ali Ali] (```member```)
+- [Joude Azzam] (```member```)
+- [Sara Alketbi] (```member```)
+- [Siham Alkousa] (```member```)
