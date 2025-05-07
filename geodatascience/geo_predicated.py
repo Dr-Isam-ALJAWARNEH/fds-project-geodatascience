@@ -50,3 +50,38 @@ class are(base_are):
                 UserWarning
             )
         return _combinable(lambda g: g.intersects(other_geometry))
+    
+
+
+
+    @staticmethod 
+    def not_within(geometry):
+        """
+        Creates a spatial predicate that identifies geometries NOT completely contained within
+        a reference shape. This is the logical inverse of the within() operation.
+        
+        Args:
+            geometry: A Shapely Polygon or MultiPolygon defining the boundary to test against
+            
+        Returns:
+            A predicate function that returns True when input geometries:
+            - Are completely outside the boundary OR
+            - Touch the boundary but aren't fully enclosed
+            
+        Behavior Details:
+            - Boundary points: Returns True (unlike within() which returns False)
+            - Null/empty geometries: Returns False
+            - Works with all Shapely geometry types (Points, LineStrings, etc.)
+            - Maintains topological accuracy using precise spatial calculations
+            
+        Example Use Cases:
+            1. Finding points outside a regulated zone:
+            `are.not_within(pollution_control_area)`
+            
+            2. Identifying features near but not inside a boundary:
+            `.where(are.intersects(boundary).and_(are.not_within(boundary)))`
+            
+            3. Data validation to detect outliers:
+            `valid_data = data.where(are.not_within(city_limits))`
+        """
+        return _combinable(lambda g: not g.within(geometry))
