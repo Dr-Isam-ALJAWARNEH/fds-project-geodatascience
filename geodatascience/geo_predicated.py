@@ -55,7 +55,7 @@ class are(base_are):
 
 
     @staticmethod 
-    def not_within(geometry):
+    def not_within(other_geometry):
         """
         Creates a spatial predicate that identifies geometries NOT completely contained within
         a reference shape. This is the logical inverse of the within() operation.
@@ -84,4 +84,4 @@ class are(base_are):
             3. Data validation to detect outliers:
             `valid_data = data.where(are.not_within(city_limits))`
         """
-        return _combinable(lambda g: not g.within(geometry))
+        return _combinable(lambda g: not g.within(other_geometry))
