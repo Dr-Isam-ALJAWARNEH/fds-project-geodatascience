@@ -1025,7 +1025,70 @@ class GeoTable(Table):
 
         return result
 
-    
+    def percentile(self, boot_stats, confidence_level=95):
+        """
+        Construct a confidence interval from bootstrap statistics using the percentile method.
+
+        Args:
+            boot_stats (np.ndarray): Array of bootstrap statistics.
+            confidence_level (float): Confidence level percentage (default: 95).
+
+        Returns:
+            tuple: Lower and upper bounds of the confidence interval.
+        """
+        lower_percentile = (100 - confidence_level) / 2
+        upper_percentile = 100 - lower_percentile
+        lower_bound = np.percentile(boot_stats, lower_percentile)
+        upper_bound = np.percentile(boot_stats, upper_percentile)
+
+        return lower_bound, upper_bound
+
+
+    def compute_statistic(self, sample, column_label, statistic_type):
+        """
+        Compute a statistic on a sample for a specified statistic type.
+
+        Args:
+            sample (GeoTable): The sample from which to compute the statistic.
+            column_label (str): The column on which the statistic is calculated (e.g., 'pm10').
+            statistic_type (str): The type of statistic to compute ('mean', 'median', or 'proportion').
+
+        Returns:
+            float: The computed statistic.
+        """
+        if column_label not in sample.labels:
+            raise ValueError(f"Column '{column_label}' not found in GeoTable.")
+
+        if statistic_type == 'median':
+            return np.median(sample.column(column_label))
+        elif statistic_type == 'mean':
+            return np.mean(sample.column(column_label))
+        elif statistic_type == 'proportion':
+            return np.mean(sample.column(column_label) == 'True') 
+        else:
+            raise ValueError(f"Statistic type '{statistic_type}' is not supported.")
+
+    def bootstrap_samples(self, column_label, statistic_type, num_repetitions=5000):
+        """
+        Perform bootstrap sampling to compute a specified statistic.
+
+        Args:
+            column_label (str): The column name for the statistic calculation.
+            statistic_type (str): The type of statistic to compute ('mean', 'median', or 'proportion').
+            num_repetitions (int): Number of bootstrap samples (default: 5000).
+
+        Returns:
+            np.ndarray: Array of bootstrapped statistic values.
+        """
+        bootstrapped_statistics = []
+
+        # Perform bootstrapping and collect statistics
+        for _ in range(num_repetitions):
+            sample = self.sample(k=len(self), with_replacement=True)
+            stat_value = self.compute_statistic(sample, column_label, statistic_type)
+            bootstrapped_statistics.append(stat_value)
+
+        return np.array(bootstrapped_statistics)
 
     @staticmethod
     def _haversine_distance(lat1, lon1, lat2, lon2):
