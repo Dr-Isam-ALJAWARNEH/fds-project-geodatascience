@@ -14,6 +14,13 @@ import matplotlib.pyplot as plt
 from collections import Counter, defaultdict
 from math import radians, sin, cos, sqrt, atan2, exp
 from datetime import timedelta, datetime
+import contextily as ctx
+import seaborn as sns
+import numpy as np
+import scipy.stats as stats
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import r2_score
+
 
 
 class GeoTable(Table):
@@ -672,8 +679,7 @@ class GeoTable(Table):
             cmap (str): Colormap.
             annot (bool): Whether to annotate cells.
         """
-        import seaborn as sns
-        import matplotlib.pyplot as plt
+
 
         corr = self.spatial_correlation_matrix(method)
         plt.figure(figsize=figsize)
@@ -690,7 +696,7 @@ class GeoTable(Table):
             y_col (str): Name of the y-axis feature (e.g., 'mean_humidity').
             label_points (bool): Whether to label each point with its index or name.
         """
-        import matplotlib.pyplot as plt
+
 
         df = self.to_df()
 
@@ -722,9 +728,6 @@ class GeoTable(Table):
             y_col (str): Feature name on y-axis.
             label_points (bool): Optionally show region index as label.
         """
-        import matplotlib.pyplot as plt
-        from sklearn.linear_model import LinearRegression
-        import numpy as np
 
         df = self.to_df().copy()
 
@@ -770,8 +773,7 @@ class GeoTable(Table):
             y_col (str): Feature name on y-axis.
             label_points (bool): Optionally annotate each point.
         """
-        import matplotlib.pyplot as plt
-        import numpy as np
+
 
         df = self.to_df()
 
@@ -817,11 +819,6 @@ class GeoTable(Table):
             x_col (str): Independent variable.
             y_col (str): Dependent variable.
         """
-        import matplotlib.pyplot as plt
-        import numpy as np
-        import scipy.stats as stats
-        from sklearn.linear_model import LinearRegression
-        from sklearn.metrics import r2_score
 
         df = self.to_df()
 
@@ -1245,8 +1242,6 @@ class GeoTable(Table):
             )
         'Financial District'
         """
-        from collections import defaultdict
-        from math import radians, sin, cos, sqrt, atan2
 
         distances = []
 
@@ -1360,9 +1355,7 @@ class GeoTable(Table):
             - If required columns ('geometry' or label_column) are missing
             - If invalid distance_metric or weight_strategy is specified
         """
-        from shapely.geometry import Point
-        from collections import defaultdict
-        from math import exp
+
 
         # Convert input to Shapely Point
         if isinstance(point, (tuple, list)):
@@ -1482,9 +1475,6 @@ class GeoTable(Table):
             - If required columns are missing
             - If point format is invalid
         """
-        from shapely.geometry import Point
-        import pandas as pd
-        from datetime import timedelta
 
         # --- Input Validation ---
         if spatial_weight + temporal_weight != 1.0:
