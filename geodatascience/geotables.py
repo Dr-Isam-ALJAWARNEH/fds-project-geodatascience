@@ -22,7 +22,6 @@ from sklearn.linear_model import LinearRegression
 from sklearn.metrics import r2_score
 
 
-
 class GeoTable(Table):
     """
     A GeoTable is an extension of the Table class that supports geospatial data.
@@ -111,7 +110,6 @@ class GeoTable(Table):
             geohash2.encode(self.column(lat_col)[i], self.column(lon_col)[i], precision=precision)
             for i in range(self.num_rows)
         ])
-
 
     @classmethod
     def read_geojson(cls, filepath_or_buffer, *args, **kwargs):
@@ -321,15 +319,11 @@ class GeoTable(Table):
         print(target)
         return target
 
-
     def _set_geo_state(self):
         """Sets GeoTable-specific state"""
 
         self._geometry = 'geometry' # Set geometry
         return self
-
-
-
 
     def with_columns(self, *args):
         """
@@ -388,7 +382,6 @@ class GeoTable(Table):
                 geo.relabel(lon_label, self._custom_lat_lon['lon'])
 
         return geo
-
 
 
     def select(self, *column_labels):
@@ -462,7 +455,6 @@ class GeoTable(Table):
             return Table().with_columns(*[(label, self.column(label)) for label in columns])
 
 
-
     def drop(self, *column_labels):
         """
         Drop columns from the GeoTable while handling geospatial properties.
@@ -518,8 +510,6 @@ class GeoTable(Table):
             
         return geo
 
-    
-
     def where(self, column_or_predicate, value=None):
         """
         Enhanced where() with geospatial error handling.
@@ -535,8 +525,6 @@ class GeoTable(Table):
                     "2. Didn't accidentally drop the geometry column"
                 ) from e
             raise  # Re-raises the original AttributeError unchanged
-
-
 
     def spatial_join(self, other, how='inner', predicate='intersects'):
         """
@@ -575,7 +563,6 @@ class GeoTable(Table):
             return None
 
 
-
     def plot_sjoined_interactive(self, neighbor_col='geohash', zoom=12):
         """
         Plots GeoTable points, grouping by the same 'neighbor' in the same color.
@@ -595,7 +582,7 @@ class GeoTable(Table):
         gdf = gdf.to_crs("EPSG:3857")
 
         # Plot
-        fig, ax = plt.subplots(figsize=(10, 8))
+        fig, ax = plt.subplots(figsize=(20, 16))
         gdf.plot(ax=ax, column=neighbor_col, cmap='tab20', legend=True,
                 markersize=40, alpha=0.8, edgecolor='black')
 
@@ -606,7 +593,6 @@ class GeoTable(Table):
         plt.tight_layout()
         plt.title(f"Points colored by '{neighbor_col}'")
         plt.show()
-
 
 
     def show(self, max_rows=10):
@@ -680,7 +666,6 @@ class GeoTable(Table):
             annot (bool): Whether to annotate cells.
         """
 
-
         corr = self.spatial_correlation_matrix(method)
         plt.figure(figsize=figsize)
         sns.heatmap(corr, cmap=cmap, annot=annot, fmt=".2f", square=True)
@@ -696,7 +681,6 @@ class GeoTable(Table):
             y_col (str): Name of the y-axis feature (e.g., 'mean_humidity').
             label_points (bool): Whether to label each point with its index or name.
         """
-
 
         df = self.to_df()
 
@@ -719,6 +703,7 @@ class GeoTable(Table):
         plt.grid(True)
         plt.tight_layout()
         plt.show()
+        
     def plot_spatial_regression(self, x_col, y_col, label_points=False):
         """
         Plots a scatter plot and regression line between two numeric columns.
@@ -773,7 +758,6 @@ class GeoTable(Table):
             y_col (str): Feature name on y-axis.
             label_points (bool): Optionally annotate each point.
         """
-
 
         df = self.to_df()
 
@@ -1138,7 +1122,6 @@ class GeoTable(Table):
 
         return result
 
-
     @staticmethod
     def _haversine_distance(lat1, lon1, lat2, lon2):
         """
@@ -1174,10 +1157,7 @@ class GeoTable(Table):
         dlon = radians(lon2 - lon1)
         a = sin(dlat / 2)**2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlon / 2)**2
         c = 2 * atan2(sqrt(a), sqrt(1 - a))
-        return R * c
-
-    
-
+        return R * c  
 
     def geo_knn_classify(
         self,
@@ -1278,9 +1258,6 @@ class GeoTable(Table):
 
         return max(label_weights.items(), key=lambda x: x[1])[0]
 
-
-
-
     def universal_geo_classifier(
         self,
         point,  # Shapely Point or (lon, lat) tuple
@@ -1355,8 +1332,6 @@ class GeoTable(Table):
             - If required columns ('geometry' or label_column) are missing
             - If invalid distance_metric or weight_strategy is specified
         """
-
-
         # Convert input to Shapely Point
         if isinstance(point, (tuple, list)):
             point = Point(point[0], point[1])  # (lon, lat)
@@ -1398,7 +1373,6 @@ class GeoTable(Table):
 
         return max(label_weights.items(), key=lambda x: x[1])[0]
     
-
 
     def geo_temporal_knn(
         self,
@@ -1522,7 +1496,6 @@ class GeoTable(Table):
         return max(set(top_k_labels), key=top_k_labels.count)
 
 
-
     def geo_ensemble_classify(
         self,
         point,
@@ -1630,7 +1603,7 @@ class GeoTable(Table):
                     raise ValueError(f"Unknown classifier: {clf_name}")
                 votes.append(pred)
             except Exception as e:
-                print(f"⚠️ Classifier '{clf_name}' failed: {str(e)}")
+                print(f"Classifier '{clf_name}' failed: {str(e)}")
                 continue  # Skip failed classifiers
 
         if not votes:
