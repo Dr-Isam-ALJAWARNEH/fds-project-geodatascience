@@ -316,7 +316,6 @@ class GeoTable(Table):
         # Ensure defaults exist if somehow undefined
         target._geometry = getattr(self, '_geometry', 'geometry')
         target._custom_lat_lon = getattr(self, '_custom_lat_lon', {'lat': None, 'lon': None}).copy()
-        print(target)
         return target
 
     def _set_geo_state(self):
